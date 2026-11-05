@@ -9,7 +9,7 @@
       :ref="(el) => setVideoEl(el, i)"
       class="hero-video absolute inset-0 h-full w-full object-cover"
       :style="{ opacity: active === i ? 1 : 0 }"
-      :src="src"
+      :src="srcs[i] || undefined"
       muted
       playsinline
       preload="auto"
@@ -25,6 +25,46 @@
 // 영상을 바꾸면 v 값을 올린다(영상 파일은 브라우저에 오래 저장되므로 주소가 바뀌어야 새 영상을 받는다).
 const SOURCES = ['/hero-bg.mp4?v=1', '/hero-bg-3.mp4?v=1']
 const FADE_SEC = 1.2 // 끝나기 이 시간 전부터 다음 영상으로 크로스페이드
+
+// 영상은 처음 한 번만 받아서 회원 브라우저 저장소(Cache Storage)에 보관하고, 다음부터는 보관해 둔 영상을 재생한다(서버에서 다시 받지 않음).
+// 영상을 바꿔 v 값이 달라지면 예전 영상은 지우고 새 영상을 한 번 받는다. 쿠키는 4KB까지만 담겨서 영상은 이 저장소를 쓴다.
+const HERO_CACHE = 'ktx-hero-video'
+const srcs = ref<string[]>(['', ''])
+const blobUrls: string[] = []
+async function loadHeroSource(url: string): Promise<string> {
+  if (typeof caches === 'undefined') return url
+  try {
+    const cache = await caches.open(HERO_CACHE)
+    let res = await cache.match(url)
+    if (!res) {
+      const net = await fetch(url)
+      if (!net.ok || net.status !== 200) return url
+      await cache.put(url, net.clone())
+      res = net
+    }
+    const blobUrl = URL.createObjectURL(await res.blob())
+    blobUrls.push(blobUrl)
+    return blobUrl
+  } catch {
+    return url
+  }
+}
+async function prepareHeroVideos() {
+  // 지금 영상 목록에 없는(예전 버전) 영상은 저장소에서 지운다
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(HERO_CACHE)
+      const want = new Set(SOURCES.map((u) => new URL(u, location.origin).href))
+      for (const req of await cache.keys()) if (!want.has(req.url)) await cache.delete(req)
+    } catch {}
+  }
+  // 첫 영상부터 준비해서 바로 재생하고, 두 번째 영상은 그다음에 준비한다
+  for (let i = 0; i < SOURCES.length; i++) {
+    const u = await loadHeroSource(SOURCES[i]!)
+    srcs.value = srcs.value.map((x, j) => (j === i ? u : x))
+    if (i === 0) nextTick(() => play(videos[0]))
+  }
+}
 
 const videos: Array<HTMLVideoElement | null> = [null, null]
 const active = ref(0)
@@ -66,7 +106,7 @@ function switchTo(next: number) {
 }
 
 onMounted(() => {
-  play(videos[0])
+  prepareHeroVideos()
   // 현재 영상이 끝나기 FADE_SEC 전에 다음 영상으로 넘어간다(영상1 → 영상2 → 영상1 …)
   timer = setInterval(() => {
     if (switching) return
@@ -78,6 +118,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
+  for (const u of blobUrls) URL.revokeObjectURL(u)
 })
 </script>
 

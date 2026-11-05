@@ -2730,12 +2730,35 @@ const profitCardIconSize = computed(() => Math.round(profitCardStyle.value.logoF
 
 let profitStyleVersion = ''
 let liquidationSettingsTick = 0
+// 브라우저에 보관해 둔 수익카드(설정 + 그림)를 먼저 쓰고, 서버에는 그 버전만 알려준다(같으면 카드 데이터를 다시 받지 않음).
+function applyProfitCardStyle(st: Partial<ProfitCardStyle>) {
+  profitCardStyle.value = { ...DEFAULT_PROFIT_CARD_STYLE, ...st, offsets: { ...(st.offsets || {}) } }
+  // 배경 그림은 별도 주소(버전이 붙은 주소, 브라우저에 1년 보관)라서, 카드를 열기 전에 미리 받아 둔다.
+  const bgUrl = String(profitCardStyle.value.bgImage || '')
+  if (process.client && bgUrl && !bgUrl.startsWith('data:')) {
+    try {
+      new Image().src = bgUrl
+    } catch {}
+  }
+}
+let profitCardCacheLoaded = false
 async function refreshLiquidationSettings() {
+  if (process.client && !profitCardCacheLoaded) {
+    profitCardCacheLoaded = true
+    const cached = loadCachedProfitCard()
+    if (cached) {
+      profitStyleVersion = cached.version
+      applyProfitCardStyle(cached.style)
+    }
+  }
   try {
     const res = await $fetch<{ liquidationRoe: number; styleVersion?: string; profitCardStyle?: Partial<ProfitCardStyle> }>('/api/settings/system', {
       query: profitStyleVersion ? { v: profitStyleVersion } : undefined
     })
-    if (res?.styleVersion && res.profitCardStyle) profitStyleVersion = res.styleVersion
+    if (res?.styleVersion && res.profitCardStyle) {
+      profitStyleVersion = res.styleVersion
+      saveCachedProfitCard(res.styleVersion, res.profitCardStyle)
+    }
     const roe = Number(res?.liquidationRoe)
     if (Number.isFinite(roe) && roe < 0) {
       LIQUIDATION_TRIGGER_ROE = roe
@@ -2746,16 +2769,7 @@ async function refreshLiquidationSettings() {
       const kr = await $fetch<{ rate: number }>('/api/settings/krw-rate').catch(() => null)
       if (Number(kr?.rate) > 0) limitKrwRate.value = Number(kr!.rate)
     }
-    if (res?.profitCardStyle && typeof res.profitCardStyle === 'object') {
-      profitCardStyle.value = { ...DEFAULT_PROFIT_CARD_STYLE, ...res.profitCardStyle, offsets: { ...(res.profitCardStyle.offsets || {}) } }
-      // 배경 그림은 별도 주소라서, 카드를 열기 전에 미리 받아 캐시해 둔다(처음 열 때 배경이 늦게 뜨지 않게).
-      const bgUrl = String(profitCardStyle.value.bgImage || '')
-      if (process.client && bgUrl && !bgUrl.startsWith('data:')) {
-        try {
-          new Image().src = bgUrl
-        } catch {}
-      }
-    }
+    if (res?.profitCardStyle && typeof res.profitCardStyle === 'object') applyProfitCardStyle(res.profitCardStyle)
   } catch {
     // 네트워크 실패 시 이전 값 유지
   }

@@ -246,14 +246,18 @@ let krwRate = 1350
 let cardSettingsLoaded = false
 async function ensureCardSettings() {
   if (cardSettingsLoaded) return
+  // 브라우저에 보관해 둔 카드가 있으면 그 버전을 보내서, 카드가 바뀌지 않았으면 카드 데이터를 다시 받지 않는다.
+  const cached = loadCachedProfitCard()
   const [sys, kr] = await Promise.all([
-    $fetch<any>('/api/settings/system').catch(() => null),
+    $fetch<any>('/api/settings/system', { query: cached ? { v: cached.version } : undefined }).catch(() => null),
     $fetch<{ rate: number }>('/api/settings/krw-rate').catch(() => null)
   ])
   const roe = Number(sys?.liquidationRoe)
   if (Number.isFinite(roe) && roe < 0) liquidationRoe = roe
   if (Number(kr?.rate) > 0) krwRate = Number(kr!.rate)
-  const st = sys?.profitCardStyle
+  let st = sys?.profitCardStyle
+  if (st && typeof st === 'object' && sys?.styleVersion) saveCachedProfitCard(String(sys.styleVersion), st)
+  else if (cached && (!sys || sys.styleVersion === cached.version)) st = cached.style
   if (st && typeof st === 'object') {
     cardStyle.value = {
       positiveColor: String(st.positiveColor || cardStyle.value.positiveColor),

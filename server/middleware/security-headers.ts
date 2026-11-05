@@ -32,6 +32,8 @@ const SECURITY_HEADERS: Record<string, string> = {
     "img-src 'self' data: https:",
     "connect-src 'self' wss://ws.okx.com:8443 wss://fstream.binance.com",
     "worker-src 'self' blob:",
+    // 첫 화면 영상은 브라우저 저장소에 보관한 영상을 blob 주소로 재생한다(HeroVideo.vue)
+    "media-src 'self' blob:",
     "frame-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
