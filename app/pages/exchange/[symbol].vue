@@ -2609,9 +2609,6 @@ let orderbookRestFail = 0
 let orderbookLevelTimer: any = null
 let pendingBinanceDepth: any = null
 let pendingBinanceDepthTimer: any = null
-// 마지막으로 받은 실제 바이낸스 호가 물량(조용한 구간에 이 값을 기준으로만 흔든다 — 흔든 값이 누적되어 실제와 멀어지지 않게)
-let lastRealAsks = new Map<number, number>()
-let lastRealBids = new Map<number, number>()
 
 // trade panel
 const side = ref<'long' | 'short'>('long')
@@ -6853,13 +6850,21 @@ function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRo
   if (!prices.length) return new Array(count).fill(null)
   const view = prices.slice(0, count)
 
-  // 누적 총량: 아래에서 위로
+  // 누적 총량은 현재가에 가까운 1호가부터 바깥쪽으로 더한다.
+  // 매도(화면: 높은 가격→낮은 가격, 1호가가 맨 아래)는 아래에서 위로, 매수(1호가가 맨 위)는 위에서 아래로.
+  // (예전엔 매수도 아래에서 위로 더해서 매수 맨 윗줄이 항상 가장 크게 나왔다.)
   let cum = 0
   const totals: number[] = new Array(view.length).fill(0)
-  for (let i = view.length - 1; i >= 0; i--) {
-    const q = Number(map.get(view[i]) ?? 0)
-    cum += q
-    totals[i] = cum
+  if (side === 'ask') {
+    for (let i = view.length - 1; i >= 0; i--) {
+      cum += Number(map.get(view[i]) ?? 0)
+      totals[i] = cum
+    }
+  } else {
+    for (let i = 0; i < view.length; i++) {
+      cum += Number(map.get(view[i]) ?? 0)
+      totals[i] = cum
+    }
   }
   // 막대 길이 기준: 총금액 400.00000 = 100% (그보다 크면 100%로 고정). 예전엔 맨 위 줄 총금액을 100%로 잡았다.
   const maxTotal = ORDERBOOK_FULL_TOTAL
@@ -8654,27 +8659,12 @@ function jitterOrderbookMap(source: Map<number, number>) {
   return next
 }
 
-function jitterAroundReal(source: Map<number, number>) {
-  const next = new Map<number, number>()
-  for (const [p, q] of source.entries()) {
-    const swing = (0.02 + Math.random() * 0.06) * (Math.random() > 0.5 ? 1 : -1)
-    next.set(p, Math.max(0.00001, q * (1 + swing)))
-  }
-  return next
-}
-
 function simulateOrderbookLevels() {
-  // usesBinanceFeed 종목은 실제 바이낸스 호가를 그대로 쓰므로, 여기서 물량을 따로 흔들면
-  // 실제 데이터 위에 가짜 움직임이 덧씌워져 더 정신없어 보인다(0.3초 간격 실제 갱신만 사용).
-  if (usesBinanceFeed(symbol.value)) {
-    // 실제 호가가 0.15초 넘게 안 오면(바이낸스는 호가가 안 바뀌면 안 보냄) 마지막 실제 물량 기준 ±2~8%로만 살짝 흔든다.
-    // 새 실제 호가가 오면 그대로 덮어써진다. 가격 줄은 건드리지 않는다.
-    if (Date.now() - lastOrderbookApplyTs < 150 || !lastRealAsks.size || !lastRealBids.size) return
-    obAsks.value = jitterAroundReal(lastRealAsks)
-    obBids.value = jitterAroundReal(lastRealBids)
-    return
-  }
-  // 현재가는 차트(lastPrice)만 따르고, 위/아래 호가 물량만 강제로 계속 움직이게 함
+  // 호가는 거래소 실제 데이터만 보여준다(바이낸스 depth20 0.1초 / OKX books 0.1초, 브라우저가 거래소에서 직접 받음).
+  // 예전엔 실제 물량 위에 랜덤 흔들기(OKX 종목 ±5~30%, 바이낸스 종목 조용할 때 ±2~8%)를 덧씌웠는데, 실제 호가와 달라져서 뺐다.
+  // 아래 가상 호가는 거래소 연결이 3초 넘게 완전히 끊겼을 때만 쓰는 비상용이다.
+  if (usesBinanceFeed(symbol.value)) return
+  if (Date.now() - Number(lastOrderbookTs || 0) < 3000) return
   ensureSyntheticOrderbook()
   if (obAsks.value.size) obAsks.value = jitterOrderbookMap(obAsks.value)
   if (obBids.value.size) obBids.value = jitterOrderbookMap(obBids.value)
@@ -8746,11 +8736,9 @@ function connectOkxWs() {
         }
         applyOrderbookUpdate(data.asks, 'ask')
         applyOrderbookUpdate(data.bids, 'bid')
-        if (msg?.action === 'snapshot') {
-          initDisplayFromMaps()
-        } else {
-          refreshDisplayIfNeeded()
-        }
+        // 새로 더 좋은 가격이 생겨도 화면에 바로 보이도록 매번 최우선 호가 8개로 다시 구성한다
+        // (예전엔 화면의 가격이 사라질 때만 다시 골라서, 실제 1호가가 아닌 옛 가격 줄이 남아 있을 수 있었다).
+        initDisplayFromMaps()
       }
     } catch {
       // ignore
@@ -8775,8 +8763,6 @@ function connectBinanceWs() {
   if (pendingBinanceDepthTimer) clearTimeout(pendingBinanceDepthTimer)
   pendingBinanceDepthTimer = null
   pendingBinanceDepth = null
-  lastRealAsks = new Map()
-  lastRealBids = new Map()
 
   const lower = symbol.value.toLowerCase()
   ws = new WebSocket(`wss://fstream.binance.com/public/stream?streams=${lower}@depth20@100ms`)
@@ -8827,10 +8813,6 @@ function connectBinanceWs() {
         resetOrderbook()
         applyOrderbookUpdate(data.a, 'ask')
         applyOrderbookUpdate(data.b, 'bid')
-        // 바이낸스가 호가가 안 바뀌는 동안은 아무것도 안 보내서(삼성처럼 거래가 뜸한 종목은 0.5~2초씩) 화면이 멈춰 보인다.
-        // 그 사이에는 이 실제 물량을 기준으로 화면 안에서만 살짝 흔들어 준다(startOrderbookLevelMotion). 데이터 추가 사용 없음.
-        lastRealAsks = new Map(obAsks.value)
-        lastRealBids = new Map(obBids.value)
         initDisplayFromMaps()
         // SAMSUNGUSDT/SKHYNIXUSDT 같은 종목은 실제 체결(aggTrade)이 몇 초에 한 번씩만 일어나서,
         // 체결가만 따라가면 차트가 몇 초씩 멈춰 보인다. 호가(매수/매도 1호가)는 100ms마다 계속
@@ -8901,7 +8883,10 @@ function startOrderbookAutoReconnect() {
     // 1초 이상 호가 업데이트가 없으면: REST 스냅샷으로 먼저 갱신 → 그래도 안되면 재연결
     if (wsStatus.value !== 'open') return
     const silenceMs = Date.now() - Number(lastOrderbookTs || 0)
-    if (silenceMs > 1000) {
+    // 바이낸스는 호가가 안 바뀌면 아무것도 안 보내서(삼성 등은 1~2초씩 조용한 게 정상) 1초 기준이면 우리 서버(Vercel)로
+    // 호가를 자주 다시 받아오게 된다. 바이낸스 종목은 5초 넘게 조용할 때만 다시 받는다(데이터 절약).
+    const silenceLimitMs = usesBinanceFeed(symbol.value) ? 5000 : 1000
+    if (silenceMs > silenceLimitMs) {
       refreshOrderbookFromRest()
         .then((ok) => {
           if (ok) return
