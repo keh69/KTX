@@ -6747,7 +6747,6 @@ const obAsks = shallowRef<Map<number, number>>(new Map())
 const obBids = shallowRef<Map<number, number>>(new Map())
 // 화면에 보여줄 가격(고정): 매도/매수 각각 8줄
 const ASK_COUNT = 8
-const ORDERBOOK_FULL_TOTAL = 400
 const BID_COUNT = 8
 const askDisplay = ref<number[]>([])
 const bidDisplay = ref<number[]>([])
@@ -6843,6 +6842,13 @@ function ensureSyntheticOrderbook() {
   regenerateSyntheticOrderbook()
 }
 
+function maxVisibleQty() {
+  let m = 0
+  for (const p of askDisplay.value.slice(0, ASK_COUNT)) m = Math.max(m, Number(obAsks.value.get(p) ?? 0))
+  for (const p of bidDisplay.value.slice(0, BID_COUNT)) m = Math.max(m, Number(obBids.value.get(p) ?? 0))
+  return m
+}
+
 function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRow | null> {
   const map = side === 'ask' ? obAsks.value : obBids.value
   const prices = side === 'ask' ? askDisplay.value : bidDisplay.value
@@ -6866,8 +6872,9 @@ function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRo
       totals[i] = cum
     }
   }
-  // 막대 길이 기준: 총금액 400.00000 = 100% (그보다 크면 100%로 고정). 예전엔 맨 위 줄 총금액을 100%로 잡았다.
-  const maxTotal = ORDERBOOK_FULL_TOTAL
+  // 막대 길이 기준: 그 가격의 수량(어느 가격에 물량이 쌓였는지 보이게). 화면에 보이는 매수·매도 16줄 중 가장 큰 수량 = 100%.
+  // (예전: 누적 총금액 400 = 100% → 1호가에서 멀수록 무조건 길어져서 물량이 쌓인 가격이 안 보였다.)
+  const maxQty = maxVisibleQty()
 
   const rows: Array<DepthRow | null> = view.map((price, i) => {
     const qty = Number(map.get(price) ?? 0)
@@ -6877,7 +6884,7 @@ function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRo
       qtyText: fmtDepth(qty),
       total: totals[i],
       totalText: fmtDepth(totals[i]),
-      depthPct: Math.min(100, (totals[i] / maxTotal) * 100)
+      depthPct: maxQty > 0 ? Math.min(100, (qty / maxQty) * 100) : 0
     }
   })
 
