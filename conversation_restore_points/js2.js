@@ -26,7 +26,7 @@ export const restorePoint = {
   git: {
     commits: ['5d43abf admin positions: remove horizontal scroll', 'f6bab6e chore: bump version'],
     pushed: true,
-    remote: 'https://github.com/hanhwasung32421-source/usdetrade.git',
+    remote: 'https://github.com/keh69/KTX.git',
     branch: 'main',
   },
   currentVersion: '2026년 8월 5일 (수) - 1',

@@ -24,7 +24,7 @@ export const restorePoint = {
   git: {
     commits: ['63583c9 chart: persist drawings via localStorage even after refresh'],
     pushed: true,
-    remote: 'https://github.com/hanhwasung32421-source/usdetrade.git',
+    remote: 'https://github.com/keh69/KTX.git',
     branch: 'main',
   },
   currentVersion: '2026년 8월 5일 (수) - 2',

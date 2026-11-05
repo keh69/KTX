@@ -27,7 +27,7 @@ export const restorePoint = {
   git: {
     commits: ['d81a81d chart: fix drawing persistence key (device-based v2)'],
     pushed: true,
-    remote: 'https://github.com/hanhwasung32421-source/usdetrade.git',
+    remote: 'https://github.com/keh69/KTX.git',
     branch: 'main',
   },
   currentVersion: '2026년 8월 5일 (수) - 3',

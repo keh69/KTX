@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 if (-not (Test-Path ".git")) {
   git init
   git branch -M main
-  git remote add origin 'https://github.com/hanhwasung32421-source/usdetrade.git'
+  git remote add origin 'https://github.com/keh69/KTX.git'
 }
 
 # 버전 증가 (yyMMdd.N)

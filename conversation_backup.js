@@ -1,7 +1,7 @@
 export const conversationBackup = {
   project: {
     name: 'exchange-demo',
-    repoRemote: 'https://github.com/hanhwasung32421-source/usdetrade',
+    repoRemote: 'https://github.com/keh69/KTX',
     framework: 'Nuxt 4',
     language: 'TypeScript',
     styling: 'Tailwind CSS',
@@ -90,7 +90,7 @@ export const conversationBackup = {
     {
       timestamp: '2026-07-20T09:48:49+09:00',
       type: 'conversation',
-      userMessage: '`https://github.com/hanhwasung32421-source/usdetrade`푸쉬는 여기로 해주면 돼. 수정할때 버전을 너가 "t" + 현재 날자 + 시간으로 텍스트로 적어줘. 디플로이될때 디플로이 되는 시간으로 적용되는게 아닌 너가 쓴 텍스트가 그대로 적용되게. 한번 푸쉬 해줘 지금',
+      userMessage: '`https://github.com/keh69/KTX`푸쉬는 여기로 해주면 돼. 수정할때 버전을 너가 "t" + 현재 날자 + 시간으로 텍스트로 적어줘. 디플로이될때 디플로이 되는 시간으로 적용되는게 아닌 너가 쓴 텍스트가 그대로 적용되게. 한번 푸쉬 해줘 지금',
       assistantWorkSummary: [
         'Git 저장소 루트가 c:\\trae 상위로 잡혀 있는 것을 확인함',
         '실제 사이트 파일만 선택 커밋해야 하는 상태임을 확인함',
