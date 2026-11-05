@@ -5014,7 +5014,9 @@ function updateLiveCandle(price: number, tsMs: number) {
     liveLastCandle.value = next
     candleData.value = candleData.value.length ? candleData.value.concat([next]) : [next]
     candleSeries.update(next)
-    volumeSeries?.update({ time, value: 0, color: 'rgba(148,163,184,0.25)' })
+    liveVolBucket = bucket
+    liveVolValue = 0
+    setLiveVolumeBar(time, 0, 'rgba(148,163,184,0.25)')
     updateVisibleHighLow()
     // 다음 봉으로 넘어간 이 순간에만 전봉을 바이낸스 확정값으로 한 번 맞춘다.
     if (last) scheduleFinalizePreviousBar()
@@ -5032,12 +5034,72 @@ function updateLiveCandle(price: number, tsMs: number) {
   liveLastCandle.value = updated
   if (candleData.value.length) candleData.value[candleData.value.length - 1] = updated
   candleSeries.update(updated)
-  volumeSeries?.update({
-    time,
-    value: 0,
-    color: p >= updated.open ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'
-  })
+  // 예전엔 여기서 거래량을 매번 0으로 덮어써서, 봉이 끝나 확정값을 받을 때에야 거래량이 "틱" 하고 생겼다.
+  setLiveVolumeBar(time, currentBarVolume(bucket), p >= updated.open ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)')
   updateVisibleHighLow()
+}
+
+// ───── 실시간 거래량 ─────
+// 지금 봉의 거래량을 실제 체결(바이낸스 aggTrade 수량 / OKX trades 수량)로 계속 더해서 막대를 실시간으로 키운다.
+// 단위는 과거 봉(REST 캔들)의 거래량과 같다(바이낸스: 코인 수량, OKX: 계약 수). 추가 서버 요청 없음(브라우저가 거래소에서 직접 받음).
+let liveVolBucket = -1
+let liveVolValue = 0
+
+function currentBarVolume(bucket: number) {
+  if (liveVolBucket === bucket) return liveVolValue
+  // 처음 화면을 열었을 때: REST로 받은 진행 중인 봉의 거래량에서 이어서 더한다.
+  const vs = volumeData.value as any[]
+  const lastVol = vs.length ? vs[vs.length - 1] : null
+  liveVolBucket = bucket
+  liveVolValue = lastVol && Number(lastVol.time) === bucket ? Number(lastVol.value) || 0 : 0
+  return liveVolValue
+}
+
+function setLiveVolumeBar(time: any, value: number, color: string) {
+  try {
+    volumeSeries?.update({ time, value, color } as any)
+  } catch {}
+  const vs = volumeData.value as any[]
+  const lastVol = vs.length ? vs[vs.length - 1] : null
+  if (lastVol && Number(lastVol.time) === Number(time)) vs[vs.length - 1] = { time, value, color }
+  else if (!lastVol || Number(lastVol.time) < Number(time)) vs.push({ time, value, color })
+}
+
+// 캔들을 새로 받으면 진행 중인 봉 거래량은 거래소 집계값과 지금까지 실시간으로 더한 값 중 큰 쪽으로 맞춘다
+// (봉이 막 바뀐 직후엔 거래소 집계가 늦어서 더 작게 올 수 있다 — 그대로 쓰면 막대가 줄어들어 보임).
+function syncLiveVolumeAfterReload() {
+  const vs = volumeData.value as any[]
+  const lastVol = vs.length ? vs[vs.length - 1] : null
+  if (!lastVol || liveVolBucket < 0) return
+  const lastT = Number(lastVol.time)
+  // 봉이 막 바뀐 직후엔 거래소 캔들 목록에 새 봉이 아직 없다: 지금까지 더한 실시간 거래량을 그대로 두고 막대도 다시 그려 준다.
+  if (lastT < liveVolBucket) {
+    const live = liveLastCandle.value || candleData.value[candleData.value.length - 1] || null
+    const up = live ? Number((live as any).close) >= Number((live as any).open) : true
+    setLiveVolumeBar(liveVolBucket as any, liveVolValue, up ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)')
+    return
+  }
+  // 거래소 데이터가 더 새로운 봉까지 왔으면 그 값부터 다시 이어서 더한다.
+  if (lastT > liveVolBucket) {
+    liveVolBucket = -1
+    return
+  }
+  const v = Math.max(Number(lastVol.value) || 0, liveVolValue)
+  liveVolValue = v
+  if (v !== Number(lastVol.value)) setLiveVolumeBar(lastVol.time, v, lastVol.color)
+}
+
+function addLiveVolume(qty: number, tsMs: number) {
+  if (!Number.isFinite(qty) || qty <= 0) return
+  const sec = Math.floor((Number.isFinite(tsMs) ? tsMs : Date.now()) / 1000)
+  const bucket = barBucketStart(sec, barSeconds(timeframe.value))
+  const last = liveLastCandle.value || candleData.value[candleData.value.length - 1] || null
+  // 아직 그 봉이 차트에 없거나(새 봉은 가격 틱이 만든다) 지난 봉의 늦은 체결이면 건드리지 않는다.
+  if (!last || Number((last as any).time) !== bucket) return
+  const v = currentBarVolume(bucket) + qty
+  liveVolValue = v
+  const up = Number((last as any).close) >= Number((last as any).open)
+  setLiveVolumeBar((last as any).time, v, up ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)')
 }
 
 const KILL_LAST_SETTINGS_KEY = 'bitduck_kill_last_settings'
@@ -8438,6 +8500,7 @@ async function loadOlderHistory() {
     setVolumeData(vols)
     candleData.value = candles
     volumeData.value = vols
+    syncLiveVolumeAfterReload()
     if (before) {
       const shift = prependCandles.length
       try { ts.setVisibleLogicalRange({ from: before.from + shift, to: before.to + shift }) } catch {}
@@ -8511,6 +8574,7 @@ async function fetchCandles(opts: { finalizePrevious?: boolean } = {}) {
   // 실제로 다시 맞춰야 하는 호출부(최초 로딩/심볼·타임프레임 변경)에서 명시적으로 fitContent()를 부른다.
   candleData.value = candles
   volumeData.value = vols
+  syncLiveVolumeAfterReload()
   liveLastCandle.value = candles[candles.length - 1] || null
   if (candles.length) {
     lastPrice.value = candles[candles.length - 1].close
@@ -8634,7 +8698,9 @@ function connectOkxWs() {
         op: 'subscribe',
         args: [
           { channel: 'tickers', instId },
-          { channel: 'books', instId }
+          { channel: 'books', instId },
+          // 실시간 거래량용 체결(브라우저가 OKX에서 직접 받음 — 서버/DB 사용 없음)
+          { channel: 'trades', instId }
         ]
       })
     )
@@ -8648,6 +8714,11 @@ function connectOkxWs() {
       const arg = msg?.arg
       const data = msg?.data?.[0]
       if (!arg || !data) return
+
+      if (arg.channel === 'trades') {
+        for (const tr of msg.data || []) addLiveVolume(Number(tr?.sz), Number(tr?.ts ?? Date.now()))
+        return
+      }
 
       if (arg.channel === 'tickers') {
         const p = Number(data.last)
@@ -8786,6 +8857,7 @@ function connectBinanceTradeWs(lower: string) {
         if (Number.isFinite(p)) {
           lastPrice.value = p
           updateLiveCandle(p, Number(data.T ?? Date.now()))
+          addLiveVolume(Number(data.q), Number(data.T ?? Date.now()))
         }
         return
       }
@@ -9986,6 +10058,8 @@ watch([() => symbol.value, timeframe], async () => {
   // 이전 심볼의 과거 봉과 섞이지 않도록 먼저 비워준다(과거 이어받기 상태도 같이 초기화).
   candleData.value = []
   volumeData.value = []
+  liveVolBucket = -1
+  liveVolValue = 0
   liveLastCandle.value = null
   resetOlderHistoryState()
   await fetchCandles().catch(() => {})
