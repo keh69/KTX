@@ -21,9 +21,12 @@
       class="mt-2 w-full rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none ring-1 ring-white/10 placeholder:text-slate-500 focus:ring-indigo-500"
     />
     <p v-if="error" class="mt-2 text-xs font-medium text-rose-400">{{ error }}</p>
+    <!-- 구매요청 버튼과 같은 모양(노란 배경 #f0b90b + 글자 #383A3E). 내 지갑처럼 화이트 테마를 반전 필터로 그리는 화면에서도
+         갈색으로 바뀌지 않도록 data-keep-colors로 실제 색을 유지한다. -->
     <button
       type="button"
-      class="mt-3 w-full rounded-lg bg-[#f0b90b] py-2.5 text-sm font-semibold text-[#383A3E] hover:bg-[#d9a609] disabled:cursor-not-allowed disabled:opacity-60"
+      data-keep-colors
+      class="mt-3 w-full rounded-lg bg-[#f0b90b] py-4 text-[20px] font-medium text-[#383A3E] hover:bg-[#d9a609] disabled:cursor-not-allowed disabled:opacity-60"
       :disabled="saving"
       @click="save"
     >
