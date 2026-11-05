@@ -5,7 +5,7 @@
 
     <form class="mt-6 space-y-4" @submit.prevent="onSubmit">
       <div>
-        <label class="text-sm text-slate-300">{{ t('아이디', 'Username') }}<span class="text-rose-400">*</span></label>
+        <label class="text-sm text-slate-300">{{ t('아이디', 'ID') }}<span class="text-rose-400">*</span></label>
         <input
           id="reg-username"
           v-model.trim="username"
@@ -179,7 +179,7 @@ const termsLines = [
   '회원은 타인의 정보를 도용하거나 허위 정보를 입력해서는 안 되며, 허위 정보 기재로 인해 서비스 제한, 거래 취소, 계정 정지, 민형사상 책임이 발생할 수 있습니다. 회사는 서비스 안정성과 회원 보호를 위해 필요한 범위 안에서 본 약관을 개정할 수 있습니다.'
 ]
 const termsLinesEn = [
-  'These terms cover the collection, storage, and use of information provided at sign-up — username, name, date of birth, bank account, account holder, and referral code — for service operation, compliance with legal obligations, customer support, abnormal-transaction detection, dispute handling, internal audits, and complaint processing.',
+  'These terms cover the collection, storage, and use of information provided at sign-up — ID, name, date of birth, bank account, account holder, and referral code — for service operation, compliance with legal obligations, customer support, abnormal-transaction detection, dispute handling, internal audits, and complaint processing.',
   'Member information is, in principle, destroyed without delay after service termination or a withdrawal request under applicable law and internal retention standards, except that records requiring preservation (such as trade history, settlement records, and complaint records) may be kept separately for at least one year, or longer where required by law.',
   'Members may request to view, correct, or withdraw their information at any time; however, some requests may not be processed immediately in cases such as unsettled transactions, security review, incomplete identity verification, ongoing disputes or investigations, or legal retention requirements, in which case the Company may explain the reason for the delay within a reasonable scope.',
   'If a security issue such as a lost password occurs, the Company may request additional information for identity verification, and may reset the password after operator approval; the reset password is set to a temporary value determined by the Company and must be changed by the member immediately.',
@@ -226,10 +226,10 @@ const canSubmit = computed(() => {
 function collectErrors(): Partial<Record<FieldKey, string>> {
   const out: Partial<Record<FieldKey, string>> = {}
   const u = username.value.trim()
-  if (!u) out.username = t('아이디를 입력해 주세요.', 'Please enter a username.')
-  else if (!usernameValid.value) out.username = t('아이디는 영문/숫자만 사용할 수 있습니다.', 'Username may only contain letters and numbers.')
-  else if (u.length < 3 || u.length > 20) out.username = t('아이디는 3~20자로 입력해 주세요.', 'Username must be 3-20 characters.')
-  else if (takenUsername.value && u === takenUsername.value) out.username = t('이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.', 'This username is already taken. Please enter a different one.')
+  if (!u) out.username = t('아이디를 입력해 주세요.', 'Please enter an ID.')
+  else if (!usernameValid.value) out.username = t('아이디는 영문/숫자만 사용할 수 있습니다.', 'ID may only contain letters and numbers.')
+  else if (u.length < 3 || u.length > 20) out.username = t('아이디는 3~20자로 입력해 주세요.', 'ID must be 3-20 characters.')
+  else if (takenUsername.value && u === takenUsername.value) out.username = t('이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.', 'This ID is already taken. Please enter a different one.')
   if (!name.value.trim()) out.name = t('이름을 입력해 주세요.', 'Please enter your name.')
   else if (!nameValid.value) out.name = t('한국어만 사용 가능합니다', 'Only Korean characters are allowed')
   if (!birthDate.value.trim()) out.birthDate = t('생년월일을 입력해 주세요.', 'Please enter your date of birth.')
