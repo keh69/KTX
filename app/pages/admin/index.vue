@@ -1965,7 +1965,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onCardArrowKey))
 
 const PROFIT_CARD_TARGET_LABELS: Record<ProfitCardTarget, { ko: string; en: string }> = {
   card: { ko: '카드 전체', en: 'Whole Card' },
-  logo: { ko: '로고(BITDUCK)', en: 'Logo (BITDUCK)' },
+  logo: { ko: '로고(KTX)', en: 'Logo (KTX)' },
   divider: { ko: '구분선', en: 'Divider Line' },
   roe: { ko: '수익률(%) 큰 글씨', en: 'ROE (%) Large Text' },
   won: { ko: '원화 보조텍스트', en: 'KRW Subtext' },

@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-// 사이트 이름(BITDUCK)이 들어간 문장을 그대로 넘기면, 이름 자리에 로고 이미지를 넣어서 보여준다.
+// 사이트 이름(KTX)이 들어간 문장을 그대로 넘기면, 이름 자리에 로고 이미지를 넣어서 보여준다.
 const props = defineProps<{ text: string }>()
 const appName = useRuntimeConfig().public.appName as string
 

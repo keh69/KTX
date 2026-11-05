@@ -177,7 +177,7 @@ export type ProfitCardStyle = {
   // 수익/손실 공통 강조색
   positiveColor: string
   negativeColor: string
-  // 로고(BITDUCK)
+  // 로고(KTX)
   logoFontSize: number
   logoColor: string
   // 수익률(%) 큰 글씨
