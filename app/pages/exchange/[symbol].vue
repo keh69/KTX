@@ -2607,6 +2607,11 @@ let orderbookWatchTimer: any = null
 let orderbookRefreshing = false
 let orderbookRestFail = 0
 let orderbookLevelTimer: any = null
+let pendingBinanceDepth: any = null
+let pendingBinanceDepthTimer: any = null
+// 마지막으로 받은 실제 바이낸스 호가 물량(조용한 구간에 이 값을 기준으로만 흔든다 — 흔든 값이 누적되어 실제와 멀어지지 않게)
+let lastRealAsks = new Map<number, number>()
+let lastRealBids = new Map<number, number>()
 
 // trade panel
 const side = ref<'long' | 'short'>('long')
@@ -8575,10 +8580,26 @@ function jitterOrderbookMap(source: Map<number, number>) {
   return next
 }
 
+function jitterAroundReal(source: Map<number, number>) {
+  const next = new Map<number, number>()
+  for (const [p, q] of source.entries()) {
+    const swing = (0.02 + Math.random() * 0.06) * (Math.random() > 0.5 ? 1 : -1)
+    next.set(p, Math.max(0.00001, q * (1 + swing)))
+  }
+  return next
+}
+
 function simulateOrderbookLevels() {
   // usesBinanceFeed 종목은 실제 바이낸스 호가를 그대로 쓰므로, 여기서 물량을 따로 흔들면
   // 실제 데이터 위에 가짜 움직임이 덧씌워져 더 정신없어 보인다(0.3초 간격 실제 갱신만 사용).
-  if (usesBinanceFeed(symbol.value)) return
+  if (usesBinanceFeed(symbol.value)) {
+    // 실제 호가가 0.15초 넘게 안 오면(바이낸스는 호가가 안 바뀌면 안 보냄) 마지막 실제 물량 기준 ±2~8%로만 살짝 흔든다.
+    // 새 실제 호가가 오면 그대로 덮어써진다. 가격 줄은 건드리지 않는다.
+    if (Date.now() - lastOrderbookApplyTs < 150 || !lastRealAsks.size || !lastRealBids.size) return
+    obAsks.value = jitterAroundReal(lastRealAsks)
+    obBids.value = jitterAroundReal(lastRealBids)
+    return
+  }
   // 현재가는 차트(lastPrice)만 따르고, 위/아래 호가 물량만 강제로 계속 움직이게 함
   ensureSyntheticOrderbook()
   if (obAsks.value.size) obAsks.value = jitterOrderbookMap(obAsks.value)
@@ -8669,6 +8690,12 @@ function connectBinanceWs() {
   wsStatus.value = 'connecting'
   lastOrderbookTs = Date.now()
   lastOrderbookApplyTs = 0
+  // 종목을 바꾸면 이전 종목의 대기 중인 호가/기준 물량을 버린다
+  if (pendingBinanceDepthTimer) clearTimeout(pendingBinanceDepthTimer)
+  pendingBinanceDepthTimer = null
+  pendingBinanceDepth = null
+  lastRealAsks = new Map()
+  lastRealBids = new Map()
 
   const lower = symbol.value.toLowerCase()
   ws = new WebSocket(`wss://fstream.binance.com/public/stream?streams=${lower}@depth20@100ms`)
@@ -8691,12 +8718,38 @@ function connectBinanceWs() {
         // 화면 갱신 자체는 최소 0.2초 간격으로 제한(메시지는 그보다 자주 와도 그냥 흘려보냄).
         // "연결이 살아있는지" 판단용 lastOrderbookTs는 위에서 매 메시지마다 갱신해뒀으므로
         // 여기서 걸러내도 무음 감지/재연결 로직에는 영향이 없다.
+        // 0.1초 안에 연달아 온 메시지는 버리지 않고(예전엔 버려서 멈춤이 더 길어졌다) 남은 시간 뒤에 가장 최신 것으로 반영한다.
         const now = Date.now()
-        if (now - lastOrderbookApplyTs < ORDERBOOK_UI_MIN_INTERVAL_MS) return
-        lastOrderbookApplyTs = now
+        const wait = ORDERBOOK_UI_MIN_INTERVAL_MS - (now - lastOrderbookApplyTs)
+        if (wait > 0) {
+          pendingBinanceDepth = data
+          if (!pendingBinanceDepthTimer) {
+            pendingBinanceDepthTimer = setTimeout(() => {
+              pendingBinanceDepthTimer = null
+              const d = pendingBinanceDepth
+              pendingBinanceDepth = null
+              if (d) applyBinanceDepth(d)
+            }, wait)
+          }
+          return
+        }
+        applyBinanceDepth(data)
+        return
+      }
+
+    } catch {
+      // ignore
+    }
+  }
+  function applyBinanceDepth(data: any) {
+        lastOrderbookApplyTs = Date.now()
         resetOrderbook()
         applyOrderbookUpdate(data.a, 'ask')
         applyOrderbookUpdate(data.b, 'bid')
+        // 바이낸스가 호가가 안 바뀌는 동안은 아무것도 안 보내서(삼성처럼 거래가 뜸한 종목은 0.5~2초씩) 화면이 멈춰 보인다.
+        // 그 사이에는 이 실제 물량을 기준으로 화면 안에서만 살짝 흔들어 준다(startOrderbookLevelMotion). 데이터 추가 사용 없음.
+        lastRealAsks = new Map(obAsks.value)
+        lastRealBids = new Map(obBids.value)
         initDisplayFromMaps()
         // SAMSUNGUSDT/SKHYNIXUSDT 같은 종목은 실제 체결(aggTrade)이 몇 초에 한 번씩만 일어나서,
         // 체결가만 따라가면 차트가 몇 초씩 멈춰 보인다. 호가(매수/매도 1호가)는 100ms마다 계속
@@ -8710,12 +8763,6 @@ function connectBinanceWs() {
           // 체결(aggTrade)은 바이낸스 시각 기준이라, 호가 틱도 같은 시계(T/E)로 맞춰야 분 경계에서 봉이 엇갈리지 않는다.
           updateLiveCandle(mid, Number(data.T ?? data.E ?? Date.now()))
         }
-        return
-      }
-
-    } catch {
-      // ignore
-    }
   }
   connectBinanceTradeWs(lower)
   startOrderbookAutoReconnect()
@@ -8791,7 +8838,9 @@ function startOrderbookLevelMotion() {
   const tick = () => {
     simulateOrderbookLevels()
     refreshDisplayIfNeeded()
-    const nextDelay = 100 + Math.floor(Math.random() * 234) // 0.1초 ~ 0.33초(예전 0.3~1초의 3배 빠르기, 화면 안에서만 계산 — 데이터 사용 없음)
+    // 0.1초 ~ 0.33초(예전 0.3~1초의 3배 빠르기, 화면 안에서만 계산 — 데이터 사용 없음).
+    // 바이낸스 종목은 조용한 구간을 메우는 용도라 0.1~0.16초로 촘촘하게 돈다(멈춤 없이 이어 보이게).
+    const nextDelay = usesBinanceFeed(symbol.value) ? 100 + Math.floor(Math.random() * 61) : 100 + Math.floor(Math.random() * 234)
     orderbookLevelTimer = setTimeout(tick, nextDelay)
   }
   tick()
