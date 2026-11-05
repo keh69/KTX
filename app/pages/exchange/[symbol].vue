@@ -928,7 +928,7 @@
           <!-- 매도(위) -->
           <div>
             <div v-for="(r, idx) in askRows" :key="'a' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#7a1d25]/45" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#7a1d25]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#f23645]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -943,7 +943,7 @@
           <!-- 매수(아래) -->
           <div>
             <div v-for="(r, idx) in bidRows" :key="'b' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#0b6b59]/45" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#0b6b59]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#22ab94]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -2599,8 +2599,9 @@ let ws: WebSocket | null = null
 let tradeWs: WebSocket | null = null
 let lastOrderbookTs = 0
 // 바이낸스 호가(depth20)는 최소 100ms~최대 250ms 간격으로 오는데, 그대로 다 화면에 반영하면
-// 너무 정신없이 바뀌어 보인다. 화면 갱신 자체는 최소 이 간격(0.3초)으로만 하도록 제한한다.
-const ORDERBOOK_UI_MIN_INTERVAL_MS = 300
+// 너무 정신없이 바뀌어 보인다. 화면 갱신 자체는 최소 이 간격(0.1초)으로만 하도록 제한한다.
+// (0.3초 → 0.1초로 3배 빠르게. 바이낸스는 원래 0.1초마다 보내고 있어서 받는 데이터 양은 그대로이고, 막대는 CSS 전환으로 부드럽게 움직인다.)
+const ORDERBOOK_UI_MIN_INTERVAL_MS = 100
 let lastOrderbookApplyTs = 0
 let orderbookWatchTimer: any = null
 let orderbookRefreshing = false
@@ -6679,6 +6680,7 @@ const obAsks = shallowRef<Map<number, number>>(new Map())
 const obBids = shallowRef<Map<number, number>>(new Map())
 // 화면에 보여줄 가격(고정): 매도/매수 각각 8줄
 const ASK_COUNT = 8
+const ORDERBOOK_FULL_TOTAL = 300
 const BID_COUNT = 8
 const askDisplay = ref<number[]>([])
 const bidDisplay = ref<number[]>([])
@@ -6789,7 +6791,8 @@ function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRo
     cum += q
     totals[i] = cum
   }
-  const maxTotal = Math.max(...totals, 1)
+  // 막대 길이 기준: 총금액 300.00000 = 100% (그보다 크면 100%로 고정). 예전엔 맨 위 줄 총금액을 100%로 잡았다.
+  const maxTotal = ORDERBOOK_FULL_TOTAL
 
   const rows: Array<DepthRow | null> = view.map((price, i) => {
     const qty = Number(map.get(price) ?? 0)
@@ -8788,7 +8791,7 @@ function startOrderbookLevelMotion() {
   const tick = () => {
     simulateOrderbookLevels()
     refreshDisplayIfNeeded()
-    const nextDelay = 300 + Math.floor(Math.random() * 701) // 0.3초 ~ 1초
+    const nextDelay = 100 + Math.floor(Math.random() * 234) // 0.1초 ~ 0.33초(예전 0.3~1초의 3배 빠르기, 화면 안에서만 계산 — 데이터 사용 없음)
     orderbookLevelTimer = setTimeout(tick, nextDelay)
   }
   tick()
