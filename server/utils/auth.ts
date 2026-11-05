@@ -117,13 +117,14 @@ export function dropSessionCacheForUser(userId: number) {
   }
 }
 
-export async function getSessionUser(event: H3Event): Promise<SessionUser | null> {
+// fresh: true면 캐시를 건너뛰고 DB에서 새로 읽는다(회원정보 화면/새로고침에 쓰는 /api/me — 서버 인스턴스가 여러 대라 다른 인스턴스의 20초 캐시에 옛 계좌가 남아 있을 수 있음).
+export async function getSessionUser(event: H3Event, opts?: { fresh?: boolean }): Promise<SessionUser | null> {
   const token = getHeader(event, IMPERSONATE_HEADER) || getCookie(event, COOKIE_NAME)
   if (!token) return null
 
   if (supabaseAppDbEnabled()) {
     const cached = sessionCache.get(token)
-    if (cached && Date.now() - cached.at < SESSION_CACHE_TTL_MS) return cached.user
+    if (!opts?.fresh && cached && Date.now() - cached.at < SESSION_CACHE_TTL_MS) return cached.user
     const fresh = await getSessionUserFromDb(token)
     if (fresh) {
       if (sessionCache.size > 2000) sessionCache.clear()

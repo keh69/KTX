@@ -1,6 +1,6 @@
 import { readBody } from 'h3'
 import { z } from 'zod'
-import { hashPassword, verifyPassword, requireUser } from '../../utils/auth'
+import { hashPassword, verifyPassword, requireUser, dropSessionCacheForUser } from '../../utils/auth'
 import { getDb } from '../../utils/db'
 import { supabaseAppDbEnabled, syncUserToSupabase } from '../../utils/supa-appdb'
 import { getSupabaseAdminClient } from '../../utils/supabase'
@@ -75,6 +75,8 @@ export default defineEventHandler(async (event) => {
     const supa = getSupabaseAdminClient()
     const { error } = await supa.from('bitduck_users').update(patch).eq('id', user.id)
     if (error) throw error
+    // 로그인 확인 결과는 서버 메모리에 20초 캐시되므로, 방금 저장한 회원정보(계좌 등)가 바로 보이게 이 회원의 캐시를 비운다.
+    dropSessionCacheForUser(user.id)
     return { ok: true }
   }
 
@@ -98,5 +100,6 @@ export default defineEventHandler(async (event) => {
 
   const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as any
   await syncUserToSupabase(userRow)
+  dropSessionCacheForUser(user.id)
   return { ok: true }
 })
