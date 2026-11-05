@@ -928,7 +928,7 @@
           <!-- 매도(위) -->
           <div>
             <div v-for="(r, idx) in askRows" :key="'a' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#7a1d25]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#7a1d25]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#f23645]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -943,7 +943,7 @@
           <!-- 매수(아래) -->
           <div>
             <div v-for="(r, idx) in bidRows" :key="'b' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 right-0 bg-[#0b6b59]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#0b6b59]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#22ab94]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
