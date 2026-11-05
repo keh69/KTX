@@ -38,11 +38,11 @@
 
           <form class="mt-8 space-y-5" @submit.prevent="onSubmit">
             <div>
-              <label class="text-xs font-semibold tracking-wide text-slate-300">{{ t('아이디', 'Username') }}</label>
+              <label class="text-xs font-semibold tracking-wide text-slate-300">{{ t('아이디', 'ID') }}</label>
               <input
                 :key="`username-${locale}`"
                 v-model.trim="username"
-                :placeholder="t('아이디', 'Username')"
+                :placeholder="t('아이디', 'ID')"
                 class="mt-2 w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-emerald-400/60"
               />
             </div>
@@ -60,7 +60,7 @@
             <div class="flex items-center justify-between text-sm">
               <label class="flex items-center gap-2 text-slate-300">
                 <input v-model="rememberId" type="checkbox" class="h-4 w-4 rounded border-white/20 bg-white/5 accent-emerald-500" />
-                {{ t('아이디 저장', 'Remember username') }}
+                {{ t('아이디 저장', 'Remember ID') }}
               </label>
               <NuxtLink to="/auth/find-password" class="font-semibold text-white underline underline-offset-4 hover:text-emerald-300">
                 {{ t('비밀번호를 잊으셨나요?', 'Forgot your password?') }}

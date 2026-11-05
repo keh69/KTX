@@ -1,11 +1,11 @@
 <template>
   <div class="mx-auto max-w-md">
     <h1 class="text-xl font-semibold">{{ t('비밀번호 찾기', 'Find Password') }}</h1>
-    <p class="mt-1 text-sm text-slate-400">{{ t('아이디, 이름, 생년월일을 입력하면 운영자에게 초기화 요청 쪽지가 전송됩니다.', 'Enter your username, name, and date of birth to send a reset request to the operator.') }}</p>
+    <p class="mt-1 text-sm text-slate-400">{{ t('아이디, 이름, 생년월일을 입력하면 운영자에게 초기화 요청 쪽지가 전송됩니다.', 'Enter your ID, name, and date of birth to send a reset request to the operator.') }}</p>
 
     <form class="mt-6 space-y-4" @submit.prevent="onSubmit">
       <div>
-        <label class="text-sm text-slate-300">{{ t('아이디', 'Username') }}<span class="text-rose-400">*</span></label>
+        <label class="text-sm text-slate-300">{{ t('아이디', 'ID') }}<span class="text-rose-400">*</span></label>
         <input v-model.trim="username" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-indigo-500" />
       </div>
       <div>
