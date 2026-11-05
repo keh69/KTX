@@ -11,7 +11,10 @@ const ProfitCardStyleSchema = z
   .object({
     offsets: z.record(z.string(), z.object({ x: z.number(), y: z.number(), s: z.number().optional() })).optional(),
     // 코인브레이커 레이아웃 세부 설정(자세한 검증은 sanitizeCb가 한다)
-    cb: z.record(z.string(), z.any()).optional()
+    cb: z.record(z.string(), z.any()).optional(),
+    cards: z.array(z.any()).max(10).optional(),
+    builtinNames: z.record(z.string(), z.string()).optional(),
+    ktxHidden: z.boolean().optional()
   })
   .catchall(z.union([z.string(), z.number()]))
 
