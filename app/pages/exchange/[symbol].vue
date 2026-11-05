@@ -5006,6 +5006,7 @@ function updateLiveCandle(price: number, tsMs: number) {
   // 이걸 "새 봉"으로 만들면 현재 봉의 시가/고저가가 엉뚱한 값으로 리셋되어 전봉 종가와 시가 사이에
   // 갭이 생기고, 차트 update도 시간 순서 오류를 낸다. 지난 분의 봉은 넘어간 뒤에는 건드리지 않는다.
   if (last && bucket < Number((last as any).time)) return
+  if (liveBuiltFromTime < 0) liveBuiltFromTime = bucket
 
   // 새 캔들 생성 (시가는 직전 봉 종가를 그대로 물려받고, 고가/저가는 시가까지 감싸도록 잡는다)
   if (!last || Number((last as any).time) !== bucket) {
@@ -5044,6 +5045,8 @@ function updateLiveCandle(price: number, tsMs: number) {
 // 단위는 과거 봉(REST 캔들)의 거래량과 같다(바이낸스: 코인 수량, OKX: 계약 수). 추가 서버 요청 없음(브라우저가 거래소에서 직접 받음).
 let liveVolBucket = -1
 let liveVolValue = 0
+// 화면을 연 뒤 처음으로 실시간 틱이 들어온 봉의 시각. 이 봉부터는 캔들 재동기화 때 바이낸스 값으로 갈아끼우지 않는다.
+let liveBuiltFromTime = -1
 
 function currentBarVolume(bucket: number) {
   if (liveVolBucket === bucket) return liveVolValue
@@ -6747,7 +6750,7 @@ const obAsks = shallowRef<Map<number, number>>(new Map())
 const obBids = shallowRef<Map<number, number>>(new Map())
 // 화면에 보여줄 가격(고정): 매도/매수 각각 8줄
 const ASK_COUNT = 8
-const ORDERBOOK_FULL_TOTAL = 300
+const ORDERBOOK_FULL_TOTAL = 400
 const BID_COUNT = 8
 const askDisplay = ref<number[]>([])
 const bidDisplay = ref<number[]>([])
@@ -6858,7 +6861,7 @@ function buildRowsFromDisplay(side: 'ask' | 'bid', count: number): Array<DepthRo
     cum += q
     totals[i] = cum
   }
-  // 막대 길이 기준: 총금액 300.00000 = 100% (그보다 크면 100%로 고정). 예전엔 맨 위 줄 총금액을 100%로 잡았다.
+  // 막대 길이 기준: 총금액 400.00000 = 100% (그보다 크면 100%로 고정). 예전엔 맨 위 줄 총금액을 100%로 잡았다.
   const maxTotal = ORDERBOOK_FULL_TOTAL
 
   const rows: Array<DepthRow | null> = view.map((price, i) => {
@@ -8552,8 +8555,12 @@ async function fetchCandles(opts: { finalizePrevious?: boolean } = {}) {
   const localLast = localCandles[localCandles.length - 1] as any
   if (localLast && candles.length) {
     const liveT = Number(localLast.time)
-    const protectFrom = opts.finalizePrevious ? liveT : liveT - intervalSeconds
-    const localTail = localCandles.slice(-4) as any[]
+    // 화면을 연 뒤 실시간으로 그린 봉은 모두 그대로 둔다(liveBuiltFromTime부터).
+    // 예전엔 분이 바뀔 때 직전 봉을 바이낸스 확정값으로 갈아끼웠는데, 확정 종가(마지막 체결가)가 화면 종가(호가 중간값)와
+    // 다르면 지금 봉의 시가가 그 값으로 다시 이어지면서 고가가 늘어나 "가격이 안 올라갔는데 끝봉 꼬리가 갑자기 길어지는" 현상이 생겼다.
+    const defaultProtect = opts.finalizePrevious ? liveT : liveT - intervalSeconds
+    const protectFrom = liveBuiltFromTime >= 0 ? Math.min(liveBuiltFromTime, defaultProtect) : defaultProtect
+    const localTail = (localCandles as any[]).filter((c) => Number(c.time) >= protectFrom)
     const localByTime = new Map<number, any>(localTail.map((c) => [Number(c.time), c]))
     for (let i = candles.length - 1; i >= 0; i--) {
       const t = Number((candles[i] as any).time)
@@ -8563,6 +8570,9 @@ async function fetchCandles(opts: { finalizePrevious?: boolean } = {}) {
     }
     const freshLastT = Number((candles[candles.length - 1] as any).time)
     for (const c of localTail) if (Number(c.time) > freshLastT) candles.push(c)
+    // 관리자 킬 꼬리는 실시간으로 그린 지난 봉에도 예전처럼 다시 반영한다(지금 봉/직전 봉은 예전과 같이 제외).
+    const olderLive = (candles as any[]).filter((c) => Number(c.time) >= protectFrom && Number(c.time) < liveT - intervalSeconds)
+    if (olderLive.length) applyKillWicks(olderLive, killEvents, intervalSeconds)
   }
   chainCandleOpens(candles)
 
@@ -10060,6 +10070,7 @@ watch([() => symbol.value, timeframe], async () => {
   volumeData.value = []
   liveVolBucket = -1
   liveVolValue = 0
+  liveBuiltFromTime = -1
   liveLastCandle.value = null
   resetOlderHistoryState()
   await fetchCandles().catch(() => {})
