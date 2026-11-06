@@ -149,12 +149,22 @@ async function toggle() {
   if (open.value) await loadThread()
 }
 
+// 다른 화면(예: 로그인 접속제한 안내)에서 상담창을 열 수 있게 한다.
+async function openFromEvent() {
+  if (!open.value) {
+    open.value = true
+    await loadThread()
+  }
+}
+
 onMounted(() => {
   ensureGuestId()
   startPolling()
+  window.addEventListener('ktx:open-guest-chat', openFromEvent)
 })
 onBeforeUnmount(() => {
   stopPolling()
+  window.removeEventListener('ktx:open-guest-chat', openFromEvent)
 })
 </script>
 

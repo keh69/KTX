@@ -5,6 +5,7 @@ import { logAppUser, logLogin } from '../../utils/supa-log'
 import { supabaseAppDbEnabled, syncBalanceToSupabase, syncUserSettingsToSupabase, syncUserToSupabase } from '../../utils/supa-appdb'
 import { supaSelectOne, supaUpsertStrict, supaUpsertUserSettings } from '../../utils/supabase'
 import { notifyTelegramOfSignup } from '../../utils/messages'
+import { usernameTaken } from '../../utils/account-security'
 
 const BodySchema = z.object({
   username: z.string().min(3).max(20),
@@ -54,8 +55,8 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 500, statusMessage: 'SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.' })
     }
 
-    const exists = await supaSelectOne<{ id: number }>('bitduck_users', { username: body.username })
-    if (exists?.id) {
+    // 아이디는 대소문자 구분 없이 하나만 쓸 수 있다(ABC가 있으면 abc로 가입 불가).
+    if (await usernameTaken(body.username)) {
       throw createError({ statusCode: 409, statusMessage: '이미 사용 중인 아이디입니다.' })
     }
     if (!body.agreedToTerms) {
@@ -123,10 +124,7 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb()
 
-  const exists = db.prepare('SELECT id FROM users WHERE username = ?').get(body.username) as
-    | { id: number }
-    | undefined
-  if (exists?.id) {
+  if (await usernameTaken(body.username)) {
     throw createError({ statusCode: 409, statusMessage: '이미 사용 중인 아이디입니다.' })
   }
   if (!body.agreedToTerms) {

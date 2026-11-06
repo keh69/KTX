@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword, requireUser, dropSessionCacheForUser } fr
 import { getDb } from '../../utils/db'
 import { supabaseAppDbEnabled, syncUserToSupabase } from '../../utils/supa-appdb'
 import { getSupabaseAdminClient } from '../../utils/supabase'
+import { diffProfile, loadProfileRow, recordProfileHistory } from '../../utils/account-security'
 
 const BodySchema = z.object({
   // 관리자 계정처럼 이름/생년월일/계좌정보가 아직 없는 경우에도(예: 총관리자 admin/1234)
@@ -71,10 +72,23 @@ export default defineEventHandler(async (event) => {
     patch.password_reset_notice_dismissed_at = now
   }
 
+  // 수정 기록(총관리자만 ADMIN에서 봄): 바뀐 항목만 이전 값 → 새 값으로 남긴다.
+  const changes = diffProfile((await loadProfileRow(user.id)) || user, patch)
+  if (body.newPassword) changes.push({ field: 'password', label: '비밀번호', before: '', after: '변경함' })
+  const logChanges = () =>
+    recordProfileHistory(event, {
+      userId: Number(user.id),
+      username: String(user.username),
+      actor: { id: Number(user.id), username: String(user.username), role: String(user.role) },
+      source: 'member_profile',
+      changes
+    })
+
   if (supabaseAppDbEnabled()) {
     const supa = getSupabaseAdminClient()
     const { error } = await supa.from('bitduck_users').update(patch).eq('id', user.id)
     if (error) throw error
+    await logChanges()
     // 로그인 확인 결과는 서버 메모리에 20초 캐시되므로, 방금 저장한 회원정보(계좌 등)가 바로 보이게 이 회원의 캐시를 비운다.
     dropSessionCacheForUser(user.id)
     return { ok: true }

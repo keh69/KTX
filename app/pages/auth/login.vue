@@ -74,7 +74,22 @@
               <span v-if="loading" class="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/40 border-t-slate-950" />
               <span>{{ loading ? t('로그인 중...', 'Logging in...') : t('로그인', 'Log In') }}</span>
             </button>
-            <p v-if="error" class="text-sm text-rose-300">{{ error }}</p>
+            <!-- 비밀번호 5회 오류 접속제한: 고객센터(관리자)에 문의 → 관리자가 비밀번호를 초기화하면 풀린다 -->
+            <div v-if="locked" class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+              <div class="font-semibold">{{ t('접속이 제한된 계정입니다', 'This account is locked') }}</div>
+              <p class="mt-1 text-rose-200/90">
+                {{ t('비밀번호를 5회 잘못 입력하여 접속이 제한되었습니다. 고객센터로 문의해 주시면 관리자가 비밀번호를 초기화해 드립니다.', 'Your account was locked after 5 wrong passwords. Please contact customer support and an administrator will reset your password.') }}
+              </p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button type="button" class="rounded-md bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-400" @click="openSupportChat">
+                  {{ t('고객센터 문의하기', 'Contact support') }}
+                </button>
+                <NuxtLink to="/auth/find-password" class="rounded-md px-3 py-2 text-xs font-semibold text-rose-100 ring-1 ring-rose-400/50 hover:bg-rose-500/20">
+                  {{ t('관리자에게 비밀번호 초기화 요청', 'Request a password reset') }}
+                </NuxtLink>
+              </div>
+            </div>
+            <p v-else-if="error" class="text-sm text-rose-300">{{ error }}</p>
           </form>
 
           <div class="mt-6 text-center text-sm text-slate-400">
@@ -134,6 +149,12 @@ const password = ref('')
 const rememberId = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
+// 비밀번호 5회 오류로 접속제한된 계정이면 true(고객센터 안내를 보여준다)
+const locked = ref(false)
+
+function openSupportChat() {
+  window.dispatchEvent(new CustomEvent('ktx:open-guest-chat'))
+}
 const loadingTitle = ref('접속 중입니다...')
 const loadingDesc = ref('인증 정보를 확인하고 있습니다.')
 const loadingTitleEn = ref('Connecting...')
@@ -164,6 +185,7 @@ onMounted(() => {
 async function onSubmit() {
   loading.value = true
   error.value = null
+  locked.value = false
   loadingTitle.value = '접속 중입니다...'
   loadingDesc.value = '서버에 연결하고 있습니다.'
   loadingTitleEn.value = 'Connecting...'
@@ -196,6 +218,7 @@ async function onSubmit() {
     loadingDescEn.value = 'Please wait a moment.'
     await navigateTo('/exchange/SAMSUNGUSDT')
   } catch (e: any) {
+    locked.value = Number(e?.statusCode || e?.data?.statusCode) === 423
     error.value = e?.data?.statusMessage || t('로그인에 실패했습니다.', 'Login failed.')
   } finally {
     loading.value = false

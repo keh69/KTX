@@ -27,6 +27,9 @@ export default defineEventHandler(async (event) => {
         password_hash: passwordHash,
         password_reset_required: true,
         password_reset_notice_dismissed_at: null,
+        // 비밀번호 초기화 = 5회 오류 접속제한 해제
+        login_fail_count: 0,
+        login_locked_at: null,
         updated_at: now
       })
       .eq('id', body.userId)
@@ -41,7 +44,7 @@ export default defineEventHandler(async (event) => {
 
   const passwordHash = hashPassword(row.username)
   db.prepare(
-    'UPDATE users SET password_hash = ?, password_reset_required = 1, password_reset_notice_dismissed_at = NULL, updated_at = ? WHERE id = ?'
+    'UPDATE users SET password_hash = ?, password_reset_required = 1, password_reset_notice_dismissed_at = NULL, login_fail_count = 0, login_locked_at = NULL, updated_at = ? WHERE id = ?'
   ).run(passwordHash, now, body.userId)
 
   const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(body.userId) as any

@@ -4,6 +4,7 @@ import { getDb } from '../../utils/db'
 import { supabaseAppDbEnabled } from '../../utils/supa-appdb'
 import { getSupabaseAdminClient } from '../../utils/supabase'
 import { createPasswordResetRequest } from '../../utils/password-reset'
+import { findUserByUsername } from '../../utils/account-security'
 
 const BodySchema = z.object({
   username: z.string().trim().min(3).max(20),
@@ -19,22 +20,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '필수 항목을 모두 올바르게 입력해 주세요.' })
   }
 
-  let user: any = null
-  if (supabaseAppDbEnabled()) {
-    const supa = getSupabaseAdminClient()
-    const { data } = await supa
-      .from('bitduck_users')
-      .select('id, username, name, birth_date, role')
-      .eq('username', body.username)
-      .eq('role', 'user')
-      .limit(1)
-    user = (data || [])[0]
-  } else {
-    const db = getDb()
-    user = db
-      .prepare(`SELECT id, username, name, birth_date, role FROM users WHERE username = ? AND role = 'user' LIMIT 1`)
-      .get(body.username)
-  }
+  // 아이디는 대소문자 구분 없이 찾는다.
+  const user: any = await findUserByUsername(body.username, { columns: 'id, username, name, birth_date, role', role: 'user' })
 
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: '일치하는 회원을 찾을 수 없습니다.' })
