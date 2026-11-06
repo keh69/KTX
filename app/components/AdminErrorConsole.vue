@@ -8,7 +8,7 @@
         <div class="mt-0.5 text-rose-400">⚠</div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 text-xs text-rose-300">
-            <span class="font-semibold">최근 오류 (총관리자 전용)</span>
+            <span class="font-semibold">최근 오류{{ isSuperAdmin ? ' (총관리자 전용)' : '' }}</span>
             <span class="text-slate-500">{{ error?.at }}</span>
           </div>
           <pre class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-200">{{ text }}</pre>
@@ -32,7 +32,7 @@
     >
       <div class="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-2xl border border-rose-500/20 bg-[#0b0510] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
         <div class="flex items-center justify-between gap-3">
-          <h2 class="text-sm font-semibold text-rose-300">최근 오류 {{ historyList.length }}개 (총관리자 전용)</h2>
+          <h2 class="text-sm font-semibold text-rose-300">최근 오류 {{ historyList.length }}개{{ isSuperAdmin ? ' (총관리자 전용)' : '' }}</h2>
           <div class="flex items-center gap-2">
             <button class="rounded-md bg-white/10 px-3 py-1.5 text-xs hover:bg-white/15" @click="copyHistory">
               {{ historyCopied ? '복사됨!' : '최근20개 복사' }}
@@ -67,11 +67,14 @@ const historyOpen = ref(false)
 
 const isSuperAdmin = computed(() => me.value?.role === 'super_admin')
 const error = computed(() => lastError.value)
-const visible = computed(() => isSuperAdmin.value && !!error.value && error.value.at !== dismissedAt.value)
+// forced: 차트 화면의 보여주기용 덤프 에러(임시) — 회원에게도 표시
+const visible = computed(
+  () => (isSuperAdmin.value || !!(error.value as any)?.forced) && !!error.value && error.value.at !== dismissedAt.value
+)
 const historyList = computed(() => errorHistory.value)
 
 function entryText(e: ClientErrorEntry) {
-  const { at, ...rest } = e
+  const { at, forced, ...rest } = e as ClientErrorEntry & { forced?: boolean }
   return JSON.stringify(rest, null, 2)
 }
 

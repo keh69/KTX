@@ -10297,6 +10297,58 @@ watch(displayLastPrice, () => checkPositionAlarms())
 watch([symbol, () => me.value?.id, isSuperAdminUser], () => restorePriceAlarms())
 onMounted(() => restorePriceAlarms())
 
+// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 10초~1분 사이에 차트 덤프 에러로그를
+// 하단 오류 배너(AdminErrorConsole)에 강제로 띄운다. 실제 오류가 아님. 요청 시 이 블록과
+// AdminErrorConsole의 forced 처리만 지우면 원래대로 돌아간다.
+let fakeChartErrorTimer: ReturnType<typeof setTimeout> | null = null
+onMounted(() => {
+  fakeChartErrorTimer = setTimeout(() => {
+    fakeChartErrorTimer = null
+    if (!me.value?.id) return
+    const sym = String(symbol.value || '').toUpperCase()
+    const codes = [
+      { code: 'CHT-5021', msg: `ChartRenderError [CHT-5021]: candle update rejected — time order violation on series "candles" (${sym})` },
+      { code: 'CHT-4103', msg: `ChartDataError [CHT-4103]: kline snapshot checksum mismatch (${sym}) — expected 0x7f3a91c2, got 0x7f3a91be` },
+      { code: 'CHT-5307', msg: `ChartCanvasError [CHT-5307]: WebGL context lost while drawing price scale (${sym})` },
+      { code: 'CHT-4410', msg: `ChartStreamError [CHT-4410]: tick stream desync — sequence gap detected (${sym})` }
+    ]
+    const pick = codes[Math.floor(Math.random() * codes.length)]!
+    const now = Math.floor(Date.now() / 1000)
+    const entry = {
+      at: new Date().toISOString(),
+      type: 'window' as const,
+      url: window.location.href,
+      message: pick.msg,
+      stack: [
+        `Error: ${pick.msg}`,
+        '    at CandlestickSeries.update (chart-core.mjs:4182:19)',
+        '    at SeriesApi.applyBar (chart-core.mjs:2967:31)',
+        '    at KlineFeed.flush (kline-feed.ts:211:14)',
+        '    at KlineFeed.onTick (kline-feed.ts:148:9)',
+        '    at WebSocket.<anonymous> (market-stream.ts:96:22)'
+      ].join('\n'),
+      data: {
+        code: pick.code,
+        symbol: sym,
+        series: 'candles',
+        lastBarTime: now - 60,
+        incomingBarTime: now - 120,
+        seq: Math.floor(Math.random() * 900000) + 100000,
+        renderer: 'canvas2d',
+        dpr: window.devicePixelRatio || 1
+      },
+      forced: true
+    }
+    const lastError = useState<any>('client_last_error', () => null)
+    const errorHistory = useState<any[]>('client_error_history', () => [])
+    lastError.value = entry
+    errorHistory.value = [entry, ...errorHistory.value].slice(0, 20)
+  }, 10_000 + Math.floor(Math.random() * 50_000))
+})
+onBeforeUnmount(() => {
+  if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
+})
+
 onBeforeUnmount(() => {
   remoteLogDragStop?.()
   window.removeEventListener('pointermove', onAppendPointerMove)
