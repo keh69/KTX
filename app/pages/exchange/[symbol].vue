@@ -10336,35 +10336,58 @@ function scheduleDumpChartError() {
       return
     }
     const sym = String(symbol.value || '').toUpperCase()
-    const codes = [
-      { code: 'CHT-5021', msg: `ChartRenderError [CHT-5021]: candle update rejected — time order violation on series "candles" (${sym})` },
-      { code: 'CHT-4103', msg: `ChartDataError [CHT-4103]: kline snapshot checksum mismatch (${sym}) — expected 0x7f3a91c2, got 0x7f3a91be` },
-      { code: 'CHT-5307', msg: `ChartCanvasError [CHT-5307]: WebGL context lost while drawing price scale (${sym})` },
-      { code: 'CHT-4410', msg: `ChartStreamError [CHT-4410]: tick stream desync — sequence gap detected (${sym})` }
-    ]
-    const pick = codes[Math.floor(Math.random() * codes.length)]!
+    // 매번 내용이 달라지도록 코드/메시지/스택/데이터를 모두 무작위로 조합한다.
+    const ri = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1))
+    const rp = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]!
+    const hex = (n: number) => Array.from({ length: n }, () => '0123456789abcdef'[ri(0, 15)]).join('')
+    const shuffle = <T,>(arr: T[]) => [...arr].sort(() => Math.random() - 0.5)
+    const tfs = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
+    const tf = rp(tfs)
     const now = Math.floor(Date.now() / 1000)
+    const templates = [
+      { cls: 'ChartRenderError', pre: 'CHT-5', msg: () => `candle update rejected — time order violation on series "${rp(['candles', 'volume', 'ma7', 'ma25', 'ma99', 'boll'])}" (${sym} ${tf})` },
+      { cls: 'ChartDataError', pre: 'CHT-4', msg: () => `kline snapshot checksum mismatch (${sym} ${tf}) — expected 0x${hex(8)}, got 0x${hex(8)}` },
+      { cls: 'ChartCanvasError', pre: 'CHT-5', msg: () => `${rp(['WebGL context lost', 'canvas buffer overflow', 'offscreen canvas detached', 'pixel ratio mismatch'])} while drawing ${rp(['price scale', 'time scale', 'crosshair', 'grid layer', 'pane #' + ri(0, 3)])} (${sym})` },
+      { cls: 'ChartStreamError', pre: 'CHT-4', msg: () => `tick stream desync — sequence gap ${ri(2, 480)} detected (${sym}@${tf})` },
+      { cls: 'ChartScaleError', pre: 'CHT-6', msg: () => `price range invalid: min=${(Math.random() * 1000).toFixed(ri(2, 6))} max=NaN (autoscale, ${sym})` },
+      { cls: 'ChartWorkerError', pre: 'CHT-7', msg: () => `indicator worker #${ri(1, 8)} terminated unexpectedly (exit ${rp([1, 134, 137, 139])}) while computing ${rp(['RSI', 'MACD', 'BOLL', 'EMA', 'KDJ', 'VWAP'])}` },
+      { cls: 'ChartSyncError', pre: 'CHT-4', msg: () => `bar merge conflict at t=${now - ri(1, 900) * 60}: open/close out of high/low bounds (${sym} ${tf})` },
+      { cls: 'ChartMemoryError', pre: 'CHT-8', msg: () => `series buffer exceeded ${rp([4096, 8192, 16384, 32768])} bars — dropped ${ri(12, 2400)} points (${sym})` }
+    ]
+    const t = rp(templates)
+    const code = `${t.pre}${String(ri(0, 999)).padStart(3, '0')}`
+    const msg = `${t.cls} [${code}]: ${t.msg()}`
+    const frames = shuffle([
+      `CandlestickSeries.update (chart-core.mjs:${ri(1000, 9999)}:${ri(5, 60)})`,
+      `SeriesApi.applyBar (chart-core.mjs:${ri(1000, 9999)}:${ri(5, 60)})`,
+      `PaneRenderer.draw (chart-render.mjs:${ri(100, 4999)}:${ri(5, 60)})`,
+      `PriceScale.recalculate (chart-scale.mjs:${ri(100, 2999)}:${ri(5, 60)})`,
+      `TimeScale.setBarSpacing (chart-scale.mjs:${ri(100, 2999)}:${ri(5, 60)})`,
+      `KlineFeed.flush (kline-feed.ts:${ri(50, 400)}:${ri(5, 40)})`,
+      `KlineFeed.onTick (kline-feed.ts:${ri(50, 400)}:${ri(5, 40)})`,
+      `IndicatorWorker.postMessage (indicator-worker.ts:${ri(20, 300)}:${ri(5, 40)})`,
+      `BarMerger.merge (bar-merger.ts:${ri(20, 300)}:${ri(5, 40)})`,
+      `requestAnimationFrame (chart-loop.mjs:${ri(10, 200)}:${ri(5, 40)})`
+    ]).slice(0, ri(4, 8))
     const entry = {
       at: new Date().toISOString(),
-      type: 'window' as const,
+      type: rp(['window', 'promise', 'vue'] as const),
       url: window.location.href,
-      message: pick.msg,
-      stack: [
-        `Error: ${pick.msg}`,
-        '    at CandlestickSeries.update (chart-core.mjs:4182:19)',
-        '    at SeriesApi.applyBar (chart-core.mjs:2967:31)',
-        '    at KlineFeed.flush (kline-feed.ts:211:14)',
-        '    at KlineFeed.onTick (kline-feed.ts:148:9)',
-        '    at WebSocket.<anonymous> (market-stream.ts:96:22)'
-      ].join('\n'),
+      message: msg,
+      stack: [`Error: ${msg}`, ...frames.map((f) => `    at ${f}`), `    at WebSocket.<anonymous> (market-stream.ts:${ri(40, 200)}:${ri(5, 40)})`].join('\n'),
       data: {
-        code: pick.code,
+        code,
         symbol: sym,
-        series: 'candles',
-        lastBarTime: now - 60,
-        incomingBarTime: now - 120,
-        seq: Math.floor(Math.random() * 900000) + 100000,
-        renderer: 'canvas2d',
+        interval: tf,
+        lastBarTime: now - ri(1, 30) * 60,
+        incomingBarTime: now - ri(31, 120) * 60,
+        seq: ri(100000, 999999),
+        traceId: `${hex(8)}-${hex(4)}-${hex(4)}-${hex(12)}`,
+        retry: ri(0, 5),
+        bars: ri(300, 5000),
+        renderer: rp(['canvas2d', 'webgl', 'webgl2']),
+        heapUsedMB: ri(80, 900),
+        fps: ri(3, 58),
         dpr: window.devicePixelRatio || 1
       },
       forced: true

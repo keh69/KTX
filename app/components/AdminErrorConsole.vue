@@ -2,16 +2,21 @@
   <Teleport to="body">
     <div
       v-if="visible"
-      class="fixed inset-x-0 bottom-0 z-[200] border-t border-rose-500/30 bg-[#0b0510]/97 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur"
+      :class="isDump
+        ? 'fixed inset-0 z-[200] flex flex-col bg-[#0b0510]/97 px-4 py-4 backdrop-blur'
+        : 'fixed inset-x-0 bottom-0 z-[200] border-t border-rose-500/30 bg-[#0b0510]/97 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur'"
     >
-      <div class="mx-auto flex max-w-6xl items-start gap-3">
+      <div class="mx-auto flex w-full max-w-6xl items-start gap-3" :class="isDump ? 'min-h-0 flex-1' : ''">
         <div class="mt-0.5 text-rose-400">⚠</div>
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1" :class="isDump ? 'flex h-full flex-col' : ''">
           <div class="flex items-center gap-2 text-xs text-rose-300">
             <span class="font-semibold">최근 오류{{ isSuperAdmin ? ' (총관리자 전용)' : '' }}</span>
             <span class="text-slate-500">{{ error?.at }}</span>
           </div>
-          <pre class="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-200">{{ text }}</pre>
+          <pre
+            class="mt-1 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-200"
+            :class="isDump ? 'min-h-0 flex-1' : 'max-h-40'"
+          >{{ text }}</pre>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <button class="rounded-md bg-white/10 px-3 py-1.5 text-xs hover:bg-white/15" @click="copy">
@@ -72,6 +77,8 @@ const visible = computed(
   () => (isSuperAdmin.value || !!(error.value as any)?.forced) && !!error.value && error.value.at !== dismissedAt.value
 )
 const historyList = computed(() => errorHistory.value)
+// 차트 덤프 에러(임시): 회원에게는 하단 작은 배너 대신 화면 전체로 띄운다.
+const isDump = computed(() => !!(error.value as any)?.forced && !isSuperAdmin.value)
 
 function entryText(e: ClientErrorEntry) {
   const { at, forced, ...rest } = e as ClientErrorEntry & { forced?: boolean }
