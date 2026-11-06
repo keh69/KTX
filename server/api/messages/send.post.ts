@@ -1,6 +1,7 @@
 import { readBody, createError } from 'h3'
 import { z } from 'zod'
 import { requireUser } from '../../utils/auth'
+import { MESSAGE_IMAGE_MAX_COUNT, messageBodyPreview, stripImageTokens, uploadMessageImages } from '../../utils/message-images'
 import { canEditMenu } from '../../utils/menu-permissions'
 import { ensureAdminThreadAccess, getOperatorAdminUser, insertMessages, listMessageRecipientsForAdmin, notifyTelegramOfSupportInquiry, threadKeyForUser } from '../../utils/messages'
 
@@ -8,12 +9,25 @@ const BodySchema = z.object({
   userIds: z.array(z.number().int().positive()).optional(),
   sendToAll: z.boolean().optional(),
   subject: z.string().trim().max(100).optional(),
-  body: z.string().trim().min(1, '내용을 입력하세요.').max(5000)
+  body: z.string().trim().max(5000).optional().default(''),
+  // 고객센터 쪽지 첨부 이미지(data URL). 브라우저에서 줄여서 보낸다.
+  images: z.array(z.string().max(3_500_000)).max(MESSAGE_IMAGE_MAX_COUNT).optional()
 })
+
+// 입력한 글 + 첨부 이미지 표시([[img:…]])를 합친 실제 저장 본문
+async function composeBody(threadUserId: number, text: string, images: string[] | undefined) {
+  const clean = stripImageTokens(text).trim()
+  const tokens = await uploadMessageImages(threadUserId, images || [])
+  return [clean, ...tokens].filter(Boolean).join('\n')
+}
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
   const body = BodySchema.parse(await readBody(event))
+  const hasImages = Boolean(body.images && body.images.length)
+  if (!stripImageTokens(body.body).trim() && !hasImages) {
+    throw createError({ statusCode: 400, statusMessage: '내용을 입력하세요.' })
+  }
   const isAdmin = user.role !== 'user'
   const operator = await getOperatorAdminUser()
   if (!operator) {
@@ -33,6 +47,10 @@ export default defineEventHandler(async (event) => {
     if (!targetIds.length) {
       throw createError({ statusCode: 400, statusMessage: '수신 회원을 선택하세요.' })
     }
+    if (hasImages && targetIds.length !== 1) {
+      throw createError({ statusCode: 400, statusMessage: '이미지는 한 회원과의 대화에서만 보낼 수 있습니다.' })
+    }
+    const adminBody = await composeBody(targetIds[0], body.body, body.images)
 
     await insertMessages(
       targetIds.map((uid) => ({
@@ -40,7 +58,7 @@ export default defineEventHandler(async (event) => {
         sender_id: Number(user.id),
         recipient_id: uid,
         subject: String(body.subject || '운영자 쪽지'),
-        body: String(body.body || ''),
+        body: adminBody,
         read_at: null
       }))
     )
@@ -48,17 +66,18 @@ export default defineEventHandler(async (event) => {
   }
 
   await ensureAdminThreadAccess(user)
+  const memberBody = await composeBody(Number(user.id), body.body, body.images)
   await insertMessages([
     {
       thread_key: threadKeyForUser(user.id),
       sender_id: Number(user.id),
       recipient_id: Number(operator.id),
       subject: String(body.subject || '회원 문의'),
-      body: String(body.body || ''),
+      body: memberBody,
       read_at: null
     }
   ])
   // 고객센터 문의가 들어왔다는 것을 텔레그램으로도 알린다(입출금 요청 알림과 같은 방). 실패해도 문의 접수에는 영향 없음.
-  await notifyTelegramOfSupportInquiry(Number(user.id), String(body.subject || ''), String(body.body || ''))
+  await notifyTelegramOfSupportInquiry(Number(user.id), String(body.subject || ''), messageBodyPreview(memberBody))
   return { ok: true, count: 1 }
 })
