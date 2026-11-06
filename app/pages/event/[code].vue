@@ -1,5 +1,6 @@
 <template>
-  <div class="evp">
+  <!-- 프로모션 페이지는 화이트 테마(반전 필터)에서도 원래 색(어두운 배경 + 금색)으로 보이게 data-keep-colors로 고정한다. -->
+  <div class="evp" data-keep-colors>
     <div v-if="pending && !data" class="flex min-h-[60vh] items-center justify-center text-sm text-slate-400">{{ t('불러오는 중…', 'Loading…') }}</div>
     <div v-else-if="error || !data" class="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 text-center">
       <div class="text-4xl">🏆</div>
