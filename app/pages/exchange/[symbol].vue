@@ -2611,7 +2611,8 @@ let pendingBinanceDepth: any = null
 let pendingBinanceDepthTimer: any = null
 // 호가표(수량/가격/총액/막대/가운데 현재가/비율)는 0.5초에 한 번씩만 다시 그린다. 그 사이에 온 호가는 모아 두었다가 다음 0.2초 차례에 최신 상태로 한 번에 반영한다.
 // (차트의 현재가/봉은 호가 메시지가 올 때마다 예전처럼 바로 움직인다 — 호가표 그리는 주기만 바꿈.)
-const ORDERBOOK_RENDER_INTERVAL_MS = 500
+// (ADMIN > 설정 > 차트 갱신주기에서 바뀜 — applyChartTiming)
+let ORDERBOOK_RENDER_INTERVAL_MS = 500
 // 호가표 가운데 현재가(호가표와 같이 0.5초마다 바뀜)
 const obShownPrice = ref<number | null>(null)
 let pendingBinanceBook: any = null
@@ -3786,6 +3787,10 @@ const recentTrades = ref<TradeRow[]>([])
 const TRADES_WINDOW_MS = 60_000
 let tradesTimer: any = null
 let tradesBusy = false
+// 체결내역 조회 주기 / 시세·포지션 확인 주기(포지션 있음·없음) — ADMIN > 설정 > 차트 갱신주기에서 바뀜
+let TRADES_POLL_MS = 1000
+let MARK_POLL_POS_MS = 1000
+let MARK_POLL_IDLE_MS = 1500
 async function pollTrades() {
   if (tradesBusy || obTab.value !== 'trades') return
   tradesBusy = true
@@ -3812,7 +3817,7 @@ async function pollTrades() {
 function startTradesPolling() {
   stopTradesPolling()
   pollTrades()
-  tradesTimer = setInterval(pollTrades, 1000)
+  tradesTimer = setInterval(pollTrades, TRADES_POLL_MS)
 }
 function stopTradesPolling() {
   if (tradesTimer) clearInterval(tradesTimer)
@@ -4045,7 +4050,7 @@ function startMarksPolling() {
   if (markPollTimer) clearTimeout(markPollTimer)
   const loop = () => {
     liveTick().catch(() => {})
-    markPollTimer = setTimeout(loop, visiblePositions.value.length ? 1000 : 1500)
+    markPollTimer = setTimeout(loop, visiblePositions.value.length ? MARK_POLL_POS_MS : MARK_POLL_IDLE_MS)
   }
   loop()
 }
@@ -5056,7 +5061,8 @@ function fillFlatCandlesFromLive(candles: CandlestickData[], intervalSeconds: nu
 // ───── 차트 그리기 주기(0.2초) ─────
 // 실시간 틱이 올 때마다 봉 값(시가/고가/저가/종가, 거래량)은 바로 계산해 두고(꼬리가 빠지지 않게),
 // 차트에 다시 그리는 것만 0.2초에 한 번씩 한다. 그릴 때는 항상 "지금 최신 봉"을 그린다.
-const CHART_RENDER_INTERVAL_MS = 200
+// (ADMIN > 설정 > 차트 갱신주기에서 바뀜 — applyChartTiming)
+let CHART_RENDER_INTERVAL_MS = 200
 let chartCandleDirty = false
 let chartVolDirtyTime: number | null = null
 let chartDrawTimer: any = null
@@ -10346,13 +10352,34 @@ function onOpenClick(s: 'long' | 'short') {
   }
   onOpen(s)
 }
+// 차트 갱신주기(ADMIN > 설정 > 차트 갱신주기): 30초마다 받아서 바뀐 값만 바로 적용한다.
+function applyChartTiming(tm: any) {
+  if (!tm || typeof tm !== 'object') return
+  const ok = (v: any) => Number.isFinite(Number(v)) && Number(v) > 0
+  if (ok(tm.chartMs) && Number(tm.chartMs) !== CHART_RENDER_INTERVAL_MS) {
+    CHART_RENDER_INTERVAL_MS = Number(tm.chartMs)
+    if (chartDrawTimer) startChartUiClock()
+  }
+  // 호가표는 매 차례 이 값을 다시 읽으므로 바꾸기만 하면 된다.
+  if (ok(tm.orderbookMs)) ORDERBOOK_RENDER_INTERVAL_MS = Number(tm.orderbookMs)
+  if (ok(tm.tradesMs) && Number(tm.tradesMs) !== TRADES_POLL_MS) {
+    TRADES_POLL_MS = Number(tm.tradesMs)
+    if (tradesTimer) {
+      clearInterval(tradesTimer)
+      tradesTimer = setInterval(pollTrades, TRADES_POLL_MS)
+    }
+  }
+  if (ok(tm.markPosMs)) MARK_POLL_POS_MS = Number(tm.markPosMs)
+  if (ok(tm.markIdleMs)) MARK_POLL_IDLE_MS = Number(tm.markIdleMs)
+}
 async function syncDumpChartError() {
-  let cfg = { enabled: false, minSec: 5, maxSec: 10, ls: { enabled: false, pct: 0 } }
+  let cfg = { enabled: false, minSec: 5, maxSec: 10, ls: { enabled: false, pct: 0 }, timing: null as any }
   try {
     cfg = await $fetch<typeof cfg>('/api/settings/dump-error')
   } catch {
     return
   }
+  applyChartTiming(cfg.timing)
   dumpLs.enabled = !!cfg.ls?.enabled
   dumpLs.pct = Math.min(100, Math.max(0, Number(cfg.ls?.pct) || 0))
   if (!cfg.enabled) {
