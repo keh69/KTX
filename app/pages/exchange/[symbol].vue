@@ -28,9 +28,9 @@
             <div class="h-10 w-px bg-[#2a2e39]" />
             <div>
               <div class="text-[20px] leading-none" :class="headerStats.up ? 'text-[#22ab94]' : 'text-[#f23645]'">
-                {{ displayLastPrice ? fmtPrice(displayLastPrice) : '—' }}
+                {{ shownLastPrice ? fmtPrice(shownLastPrice) : '—' }}
               </div>
-              <div class="mt-1 text-[12px] text-[#868993]">≈{{ displayLastPrice ? fmtPrice(displayLastPrice) : '—' }} USD</div>
+              <div class="mt-1 text-[12px] text-[#868993]">≈{{ shownLastPrice ? fmtPrice(shownLastPrice) : '—' }} USD</div>
             </div>
             <div class="text-[12px] text-[#868993]">
               <div>{{ t('24시간 변동률', '24H Price Change') }}</div>
@@ -937,7 +937,7 @@
 
           <!-- 현재가 -->
           <div class="-mx-3 my-1 flex items-center border-y border-white/5 px-3 py-1.5 font-mono text-[17px] text-[#36f2c6]">
-            <span>{{ displayLastPrice ? Number(displayLastPrice).toFixed(2) : '—' }}</span>
+            <span>{{ shownLastPrice ? Number(shownLastPrice).toFixed(2) : '—' }}</span>
           </div>
 
           <!-- 매수(아래) -->
@@ -1061,7 +1061,7 @@
                   <span class="font-mono text-slate-400">USDT</span>
                 </div>
                 <div class="mt-2 flex items-center justify-between gap-2 rounded-md border border-[#173753] bg-[#041425] px-3 py-2 font-mono text-slate-100">
-                  <span v-if="orderType === 'market'">{{ displayLastPrice ? fmtPrice(displayLastPrice) : '—' }}</span>
+                  <span v-if="orderType === 'market'">{{ shownLastPrice ? fmtPrice(shownLastPrice) : '—' }}</span>
                   <input
                     v-else
                     v-model="limitPriceDraft"
@@ -1748,7 +1748,7 @@
             />
             <span class="text-sm text-slate-400">USDT</span>
           </div>
-          <p class="mt-1 text-xs text-slate-500">{{ t('현재가', 'Current') }} {{ displayLastPrice ? fmtPrice(displayLastPrice) : '—' }}</p>
+          <p class="mt-1 text-xs text-slate-500">{{ t('현재가', 'Current') }} {{ shownLastPrice ? fmtPrice(shownLastPrice) : '—' }}</p>
         </div>
 
         <div class="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -1926,7 +1926,7 @@
           <button type="button" class="rounded-full p-2 text-slate-400 hover:bg-white/10 hover:text-white" @click="remote2Open = false">✕</button>
         </div>
         <p class="mt-1 text-xs text-slate-500">
-          {{ t('현재가', 'Current') }} {{ displayLastPrice ? fmtPrice(displayLastPrice) : '—' }} ·
+          {{ t('현재가', 'Current') }} {{ shownLastPrice ? fmtPrice(shownLastPrice) : '—' }} ·
           {{ t('목표마다 A(가는 중) → B(머무름) 순서로 진행하고, 마지막 목표 뒤에는 정상가로 돌아옵니다.', 'Each target runs A (move) → B (hold); after the last target the price returns to normal.') }}
         </p>
 
@@ -3070,7 +3070,8 @@ function updateLastTag() {
     lastTag.value = null
     return
   }
-  const c: any = liveLastCandle.value || candleData.value[candleData.value.length - 1]
+  // 현재가 태그도 차트와 같이 0.2초마다 바뀐 값(sampledLegend)을 쓴다. 위치는 확대/스크롤 때문에 0.1초마다 다시 잰다.
+  const c: any = sampledLegend.value || liveLastCandle.value || candleData.value[candleData.value.length - 1]
   const price = Number(c?.close)
   if (!c || !Number.isFinite(price)) {
     lastTag.value = null
@@ -3430,6 +3431,10 @@ let lastSeenProfitEventId = 0
 let profitPollTimer: any = null
 
 const displayLastPrice = computed(() => adminKillUiOverride.value ?? adminProfitUiOverride.value ?? lastPrice.value ?? null)
+// 화면에 보이는 현재가/차트 범례 숫자는 0.2초마다 한 번만 바꾼다(계산·주문·알림은 위의 실시간 값을 그대로 씀).
+const sampledLastPrice = ref<number | null>(null)
+const sampledLegend = shallowRef<null | { open: number; high: number; low: number; close: number; volume: number }>(null)
+const shownLastPrice = computed(() => adminKillUiOverride.value ?? adminProfitUiOverride.value ?? sampledLastPrice.value ?? lastPrice.value ?? null)
 // 리모콘/킬로 가격이 움직이는 동안에는 호가창도 같이 움직인다: 실제 호가 가격들에 (보이는 가격 - 실제 가격)만큼을 더해 사다리 전체가 따라 움직인다.
 const obRemoteOffset = computed(() => {
   const real = Number(lastPrice.value || 0)
@@ -3804,6 +3809,8 @@ const ohlcLegend = computed(() => {
   let open: number, high: number, low: number, close: number, volume: number
   if (h) {
     ;({ open, high, low, close, volume } = h)
+  } else if (sampledLegend.value) {
+    ;({ open, high, low, close, volume } = sampledLegend.value)
   } else {
     const c: any = liveLastCandle.value || candleData.value[candleData.value.length - 1]
     if (!c) return { open: '—', high: '—', low: '—', close: '—', volume: '—', up: true }
@@ -5011,8 +5018,6 @@ let chartCandleDirty = false
 let chartVolDirtyTime: number | null = null
 let chartDrawTimer: any = null
 function flushChartDraw() {
-  if (chartDrawTimer) clearTimeout(chartDrawTimer)
-  chartDrawTimer = null
   if (chartCandleDirty) {
     chartCandleDirty = false
     const live: any = liveLastCandle.value
@@ -5033,12 +5038,27 @@ function flushChartDraw() {
     }
   }
 }
+// 0.2초 시계: 정확히 0.2초마다 (1) 바뀐 봉/거래량을 차트에 그리고 (2) 화면에 보이는 현재가·범례 숫자를 갱신한다.
+function chartUiTick() {
+  flushChartDraw()
+  sampledLastPrice.value = lastPrice.value ?? null
+  const c: any = liveLastCandle.value || candleData.value[candleData.value.length - 1]
+  const vs = volumeData.value as any[]
+  const next = c
+    ? { open: Number(c.open), high: Number(c.high), low: Number(c.low), close: Number(c.close), volume: vs.length ? Number(vs[vs.length - 1].value) || 0 : 0 }
+    : null
+  const prev = sampledLegend.value
+  if (!prev || !next || prev.open !== next.open || prev.high !== next.high || prev.low !== next.low || prev.close !== next.close || prev.volume !== next.volume) {
+    sampledLegend.value = next
+  }
+}
+function startChartUiClock() {
+  if (!process.client) return
+  if (chartDrawTimer) clearInterval(chartDrawTimer)
+  chartDrawTimer = setInterval(chartUiTick, CHART_RENDER_INTERVAL_MS)
+}
 function scheduleChartDraw() {
-  if (chartDrawTimer) return
-  chartDrawTimer = setTimeout(() => {
-    chartDrawTimer = null
-    flushChartDraw()
-  }, CHART_RENDER_INTERVAL_MS)
+  // 실제 그리기는 0.2초 시계(chartUiTick)가 한다.
 }
 
 function updateLiveCandle(price: number, tsMs: number) {
@@ -10189,6 +10209,7 @@ onMounted(async () => {
   startAccountAutoRefresh()
   startMarksPolling()
   startOrderbookLevelMotion()
+  startChartUiClock()
   await ensureChartReady()
   await fetchCandles().catch(() => {})
   fitChartAndLockPriceScale()
@@ -10290,7 +10311,7 @@ onBeforeUnmount(() => {
   orderbookWatchTimer = null
   if (orderbookLevelTimer) clearTimeout(orderbookLevelTimer)
   orderbookLevelTimer = null
-  if (chartDrawTimer) clearTimeout(chartDrawTimer)
+  if (chartDrawTimer) clearInterval(chartDrawTimer)
   chartDrawTimer = null
   chartCandleDirty = false
   chartVolDirtyTime = null
