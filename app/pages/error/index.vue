@@ -47,6 +47,7 @@ useHead({ title: 'Error' })
 type DumpEntry = ReturnType<typeof makeDumpChartError>
 const entry = ref<DumpEntry | null>(null)
 const from = ref('/exchange/SAMSUNGUSDT')
+const kind = ref<'timer' | 'ls'>('timer')
 
 const code = computed(() => String((entry.value?.data as any)?.code || ''))
 const dataText = computed(() => (entry.value ? JSON.stringify(entry.value.data, null, 2) : ''))
@@ -56,8 +57,10 @@ let poll: ReturnType<typeof setInterval> | null = null
 // ADMIN에서 덤프오류를 끄면 원래 보던 차트로 돌아간다.
 async function checkStillOn() {
   try {
-    const cfg = await $fetch<{ enabled: boolean }>('/api/settings/dump-error')
-    if (!cfg.enabled) {
+    const cfg = await $fetch<{ enabled: boolean; ls?: { enabled: boolean } }>('/api/settings/dump-error')
+    // 롱숏 덤프로 넘어온 경우에는 롱숏 덤프 ON/OFF를, 시간 덤프로 넘어온 경우에는 덤프오류 ON/OFF를 따른다.
+    const stillOn = kind.value === 'ls' ? !!cfg.ls?.enabled : !!cfg.enabled
+    if (!stillOn) {
       try {
         sessionStorage.removeItem('ktx_dump_error')
       } catch {}
@@ -73,6 +76,7 @@ onMounted(() => {
     const saved = JSON.parse(sessionStorage.getItem('ktx_dump_error') || 'null')
     if (saved?.entry) entry.value = saved.entry
     if (typeof saved?.from === 'string' && saved.from.startsWith('/')) from.value = saved.from
+    if (saved?.kind === 'ls') kind.value = 'ls'
   } catch {}
   // 주소로 바로 들어오거나 보관된 내용이 없으면 새로 만든다.
   if (!entry.value) {

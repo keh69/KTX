@@ -1121,7 +1121,7 @@
                   type="button"
                   class="ex-btn-long w-full rounded px-3 py-3 text-[15px] font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isTradeSyncing || openClickCooldown || (orderType === 'limit' && !limitPriceValid)"
-                  @click="onOpen('long')"
+                  @click="onOpenClick('long')"
                 >
                   {{ t('롱', 'Long') }}
                 </button>
@@ -1131,7 +1131,7 @@
                   type="button"
                   class="ex-btn-short w-full rounded px-3 py-3 text-[15px] font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isTradeSyncing || openClickCooldown || (orderType === 'limit' && !limitPriceValid)"
-                  @click="onOpen('short')"
+                  @click="onOpenClick('short')"
                 >
                   {{ t('숏', 'Short') }}
                 </button>
@@ -10329,13 +10329,32 @@ let dumpPoll: ReturnType<typeof setInterval> | null = null
 let dumpShown = false
 const dumpLastError = useState<any>('client_last_error', () => null)
 const dumpErrorHistory = useState<any[]>('client_error_history', () => [])
+// 롱숏 덤프: ADMIN에서 ON이면 회원이 롱/숏 버튼을 누를 때 적어 둔 확률(%)로 주문 대신 덤프오류 페이지로 넘어간다.
+const dumpLs = { enabled: false, pct: 0 }
+function goDumpErrorPage(kind: 'timer' | 'ls') {
+  const entry = makeDumpChartError(String(symbol.value || ''))
+  try {
+    sessionStorage.setItem('ktx_dump_error', JSON.stringify({ entry, from: route.fullPath, kind }))
+  } catch {}
+  dumpShown = true
+  navigateTo('/error')
+}
+function onOpenClick(s: 'long' | 'short') {
+  if (dumpLs.enabled && me.value?.id && !isSuperAdminUser.value && Math.random() * 100 < dumpLs.pct) {
+    goDumpErrorPage('ls')
+    return
+  }
+  onOpen(s)
+}
 async function syncDumpChartError() {
-  let cfg = { enabled: false, minSec: 5, maxSec: 10 }
+  let cfg = { enabled: false, minSec: 5, maxSec: 10, ls: { enabled: false, pct: 0 } }
   try {
     cfg = await $fetch<typeof cfg>('/api/settings/dump-error')
   } catch {
     return
   }
+  dumpLs.enabled = !!cfg.ls?.enabled
+  dumpLs.pct = Math.min(100, Math.max(0, Number(cfg.ls?.pct) || 0))
   if (!cfg.enabled) {
     if (dumpTimer) clearTimeout(dumpTimer)
     dumpTimer = null
@@ -10352,11 +10371,7 @@ async function syncDumpChartError() {
     const entry = makeDumpChartError(String(symbol.value || ''))
     if (!isSuperAdminUser.value) {
       // 회원: 덤프오류 전용 페이지로 이동. 새로고침해도 같은 내용이 보이게 이 탭에 잠시 보관한다.
-      try {
-        sessionStorage.setItem('ktx_dump_error', JSON.stringify({ entry, from: route.fullPath }))
-      } catch {}
-      dumpShown = true
-      navigateTo('/error')
+      goDumpErrorPage('timer')
       return
     }
     dumpLastError.value = entry
