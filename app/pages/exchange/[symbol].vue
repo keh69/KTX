@@ -3067,13 +3067,41 @@ const priceLines: any[] = []
 // 차트 우측 현재가 태그(가격축 위에 겹쳐 그린다). 위치는 주기적으로 다시 계산한다.
 const lastTag = ref<null | { y: number; text: string; up: boolean; w: number }>(null)
 let lastTagTimer: any = null
+// 차트에 "실제로 마지막으로 그린" 봉. 현재가 태그는 이 봉의 종가로 그려야 차트의 현재가 점선과 정확히 같은 높이에 붙는다.
+let tagCandle: any = null
+let lastTagRaf = 0
+// 차트가 봉을 새로 그린 그 화면(프레임)에서 태그 위치도 같이 다시 잰다(차트가 먼저 그리고, 바로 이어서 태그를 옮김).
+function scheduleLastTagSync() {
+  if (!process.client || lastTagRaf) return
+  lastTagRaf = requestAnimationFrame(() => {
+    lastTagRaf = 0
+    updateLastTag()
+  })
+}
+// 봉을 차트에 그리는 모든 곳(실시간/킬/수익 효과/재조회)을 한 곳에서 잡아, 그린 봉을 기억하고 태그를 같은 프레임에 맞춘다.
+function hookCandleSeriesForTag(series: any) {
+  const origUpdate = series.update.bind(series)
+  const origSetData = series.setData.bind(series)
+  series.update = (bar: any, ...rest: any[]) => {
+    const r = origUpdate(bar, ...rest)
+    if (!tagCandle || Number(bar?.time) >= Number(tagCandle.time)) tagCandle = bar
+    scheduleLastTagSync()
+    return r
+  }
+  series.setData = (data: any[], ...rest: any[]) => {
+    const r = origSetData(data, ...rest)
+    tagCandle = Array.isArray(data) && data.length ? data[data.length - 1] : null
+    scheduleLastTagSync()
+    return r
+  }
+}
 function updateLastTag() {
   if (!candleSeries || !chart) {
     lastTag.value = null
     return
   }
   // 현재가 태그도 차트와 같이 0.2초마다 바뀐 값(sampledLegend)을 쓴다. 위치는 확대/스크롤 때문에 0.1초마다 다시 잰다.
-  const c: any = sampledLegend.value || liveLastCandle.value || candleData.value[candleData.value.length - 1]
+  const c: any = tagCandle || sampledLegend.value || liveLastCandle.value || candleData.value[candleData.value.length - 1]
   const price = Number(c?.close)
   if (!c || !Number.isFinite(price)) {
     lastTag.value = null
@@ -3095,6 +3123,9 @@ function updateLastTag() {
   const text = fmtPrice(price)
   const up = Number(c.close) >= Number(c.open)
   const prev = lastTag.value
+  if (!prev || prev.up !== up) {
+    try { candleSeries.applyOptions({ priceLineColor: up ? '#10b981' : '#ef4444' }) } catch {}
+  }
   if (prev && prev.y === y && prev.text === text && prev.up === up && prev.w === w) return
   lastTag.value = { y, text, up, w }
 }
@@ -8243,6 +8274,8 @@ function initChart() {
     lastValueVisible: false,
     priceLineColor: '#10b981'
   })
+  tagCandle = null
+  hookCandleSeriesForTag(candleSeries)
   candleSeries.applyOptions({ priceLineColor: currentCandleMeta.value.up ? '#10b981' : '#ef4444' })
   applyPriceFormatForSymbol(symbol.value)
 
@@ -10184,14 +10217,7 @@ watch(
   { immediate: true }
 )
 
-watch(
-  () => currentCandleMeta.value.up,
-  (up) => {
-    try {
-      candleSeries?.applyOptions({ priceLineColor: up ? '#10b981' : '#ef4444' })
-    } catch {}
-  }
-)
+// 현재가 점선 색(상승=초록/하락=빨강)은 현재가 태그와 같은 봉(차트에 그린 봉) 기준으로 updateLastTag에서 함께 바꾼다.
 onMounted(async () => {
   loadFavSymbols()
   try {
