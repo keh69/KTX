@@ -928,7 +928,7 @@
           <!-- 매도(위) -->
           <div>
             <div v-for="(r, idx) in askRows" :key="'a' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#7a1d25]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#7a1d25]/45 transition-[width] duration-200 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#f23645]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -943,7 +943,7 @@
           <!-- 매수(아래) -->
           <div>
             <div v-for="(r, idx) in bidRows" :key="'b' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#0b6b59]/45 transition-[width] duration-150 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#0b6b59]/45 transition-[width] duration-200 ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#22ab94]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -2609,6 +2609,31 @@ let orderbookRestFail = 0
 let orderbookLevelTimer: any = null
 let pendingBinanceDepth: any = null
 let pendingBinanceDepthTimer: any = null
+// 호가표(수량/총액/막대)는 0.2초에 한 번씩만 다시 그린다. 그 사이에 온 호가는 모아 두었다가 다음 0.2초 차례에 최신 상태로 한 번에 반영한다.
+// (차트의 현재가/봉은 호가 메시지가 올 때마다 예전처럼 바로 움직인다 — 호가표 그리는 주기만 바꿈.)
+const ORDERBOOK_RENDER_INTERVAL_MS = 200
+let pendingBinanceBook: any = null
+let pendingOkxBook: Array<{ snapshot: boolean; asks: any[]; bids: any[] }> = []
+function flushPendingOrderbook() {
+  if (pendingBinanceBook) {
+    const d = pendingBinanceBook
+    pendingBinanceBook = null
+    resetOrderbook()
+    applyOrderbookUpdate(d.a, 'ask')
+    applyOrderbookUpdate(d.b, 'bid')
+    initDisplayFromMaps()
+  }
+  if (pendingOkxBook.length) {
+    const q = pendingOkxBook
+    pendingOkxBook = []
+    for (const m of q) {
+      if (m.snapshot) resetOrderbook()
+      applyOrderbookUpdate(m.asks, 'ask')
+      applyOrderbookUpdate(m.bids, 'bid')
+    }
+    initDisplayFromMaps()
+  }
+}
 
 // trade panel
 const side = ref<'long' | 'short'>('long')
@@ -8691,6 +8716,8 @@ function connectOkxWs() {
   ws?.close()
   asks.value = []
   bids.value = []
+  pendingOkxBook = []
+  pendingBinanceBook = null
   resetOrderbook()
   wsStatus.value = 'connecting'
   lastOrderbookTs = Date.now()
@@ -8738,14 +8765,10 @@ function connectOkxWs() {
 
       if (arg.channel === 'books') {
         lastOrderbookTs = Date.now()
-        if (msg?.action === 'snapshot') {
-          resetOrderbook()
-        }
-        applyOrderbookUpdate(data.asks, 'ask')
-        applyOrderbookUpdate(data.bids, 'bid')
-        // 새로 더 좋은 가격이 생겨도 화면에 바로 보이도록 매번 최우선 호가 8개로 다시 구성한다
-        // (예전엔 화면의 가격이 사라질 때만 다시 골라서, 실제 1호가가 아닌 옛 가격 줄이 남아 있을 수 있었다).
-        initDisplayFromMaps()
+        // 바로 그리지 않고 모아 두었다가 0.2초마다 한 번에 반영한다(스냅샷이 오면 그 전 것은 버림).
+        // 반영할 때는 매번 최우선 호가 8개로 다시 구성한다(옛 가격 줄이 남지 않게).
+        if (msg?.action === 'snapshot') pendingOkxBook = []
+        pendingOkxBook.push({ snapshot: msg?.action === 'snapshot', asks: data.asks, bids: data.bids })
       }
     } catch {
       // ignore
@@ -8770,6 +8793,8 @@ function connectBinanceWs() {
   if (pendingBinanceDepthTimer) clearTimeout(pendingBinanceDepthTimer)
   pendingBinanceDepthTimer = null
   pendingBinanceDepth = null
+  pendingBinanceBook = null
+  pendingOkxBook = []
 
   const lower = symbol.value.toLowerCase()
   ws = new WebSocket(`wss://fstream.binance.com/public/stream?streams=${lower}@depth20@100ms`)
@@ -8817,10 +8842,8 @@ function connectBinanceWs() {
   }
   function applyBinanceDepth(data: any) {
         lastOrderbookApplyTs = Date.now()
-        resetOrderbook()
-        applyOrderbookUpdate(data.a, 'ask')
-        applyOrderbookUpdate(data.b, 'bid')
-        initDisplayFromMaps()
+        // 호가표는 0.2초마다 그린다(최신 것만 남김). 아래 현재가/봉 갱신은 예전 그대로 매번.
+        pendingBinanceBook = data
         // SAMSUNGUSDT/SKHYNIXUSDT 같은 종목은 실제 체결(aggTrade)이 몇 초에 한 번씩만 일어나서,
         // 체결가만 따라가면 차트가 몇 초씩 멈춰 보인다. 호가(매수/매도 1호가)는 100ms마다 계속
         // 갱신되므로, 그 중간값으로 현재가를 계속 갱신해 실제 체결이 뜸한 구간에도 실시간처럼
@@ -8910,12 +8933,11 @@ function startOrderbookLevelMotion() {
   if (!process.client) return
   if (orderbookLevelTimer) clearTimeout(orderbookLevelTimer)
   const tick = () => {
+    // 0.2초마다: 그동안 받은 실제 호가를 한 번에 반영 → (호가가 3초 넘게 끊긴 경우에만) 대체 호가 → 빠진 줄 보충
+    flushPendingOrderbook()
     simulateOrderbookLevels()
     refreshDisplayIfNeeded()
-    // 0.1초 ~ 0.33초(예전 0.3~1초의 3배 빠르기, 화면 안에서만 계산 — 데이터 사용 없음).
-    // 바이낸스 종목은 조용한 구간을 메우는 용도라 0.1~0.16초로 촘촘하게 돈다(멈춤 없이 이어 보이게).
-    const nextDelay = usesBinanceFeed(symbol.value) ? 100 + Math.floor(Math.random() * 61) : 100 + Math.floor(Math.random() * 234)
-    orderbookLevelTimer = setTimeout(tick, nextDelay)
+    orderbookLevelTimer = setTimeout(tick, ORDERBOOK_RENDER_INTERVAL_MS)
   }
   tick()
 }
