@@ -37,6 +37,7 @@
     <NuxtLink
       v-if="me && showBell"
       :to="bellTarget"
+      :target="bellNewTab ? '_blank' : undefined"
       class="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10 hover:text-white"
       aria-label="Notifications"
     >
@@ -108,7 +109,12 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ bellTarget?: string; showBell?: boolean; showWashControl?: boolean }>(), { bellTarget: '/support', showBell: true, showWashControl: false })
+withDefaults(defineProps<{ bellTarget?: string; bellNewTab?: boolean; showBell?: boolean; showWashControl?: boolean }>(), {
+  bellTarget: '/support',
+  bellNewTab: false,
+  showBell: true,
+  showWashControl: false
+})
 
 const { me } = useMe()
 const { unread } = useMessages()

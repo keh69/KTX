@@ -35,6 +35,7 @@
             <template v-for="key in orderedMainNavKeys" :key="key">
               <NuxtLink
                 :to="key === 'support' ? supportTarget : MAIN_NAV_ROUTES[key]"
+                :target="key === 'support' ? supportLinkTarget : undefined"
                 class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 hover:bg-cyan-400/10 hover:text-white"
                 @click="startNavLoading(key === 'support' ? supportTarget : MAIN_NAV_ROUTES[key])"
               >
@@ -86,10 +87,10 @@
               <NuxtLink to="/auth/login" class="px-2 py-1.5 font-medium text-amber-400 hover:text-amber-300" @click="startNavLoading('/auth/login')">{{ t('로그인', 'Login') }}</NuxtLink>
               <NuxtLink to="/auth/register" class="rounded-lg bg-[#f0b90b] px-5 py-1.5 font-medium text-[#383A3E] hover:bg-[#d9a609]" @click="startNavLoading('/auth/register')">{{ t('회원가입', 'Register') }}</NuxtLink>
             </template>
-            <HeaderTools :bell-target="bellTarget" show-wash-control />
+            <HeaderTools :bell-target="bellTarget" :bell-new-tab="isAdmin" show-wash-control />
           </div>
 
-          <HeaderTools class="md:hidden" :bell-target="bellTarget" />
+          <HeaderTools class="md:hidden" :bell-target="bellTarget" :bell-new-tab="isAdmin" />
           <button
             :key="`mobile-menu-btn-${locale}`"
             type="button"
@@ -199,14 +200,14 @@
         <div>
           <div class="mb-3 font-semibold text-slate-300">{{ t('서비스', 'Services') }}</div>
           <ul class="space-y-2">
-            <li><NuxtLink :to="supportTarget" class="hover:text-white" @click="startNavLoading(supportTarget)">{{ t('고객센터', 'Support Center') }}</NuxtLink></li>
+            <li><NuxtLink :to="supportTarget" :target="supportLinkTarget" class="hover:text-white" @click="startNavLoading(supportTarget)">{{ t('고객센터', 'Support Center') }}</NuxtLink></li>
             <li><a href="#" class="hover:text-white" @click.prevent="onInstallApp">{{ t('앱 설치', 'Install App') }}</a></li>
           </ul>
         </div>
         <div>
           <div class="mb-3 font-semibold text-slate-300">{{ t('지원', 'Support') }}</div>
           <ul class="space-y-2">
-            <li><NuxtLink :to="supportTarget" class="hover:text-white" @click="startNavLoading(supportTarget)">{{ t('고객지원', 'Customer Support') }}</NuxtLink></li>
+            <li><NuxtLink :to="supportTarget" :target="supportLinkTarget" class="hover:text-white" @click="startNavLoading(supportTarget)">{{ t('고객지원', 'Customer Support') }}</NuxtLink></li>
             <li><NuxtLink to="/profile" class="hover:text-white" @click="startNavLoading('/profile')">{{ t('보안 설정', 'Security Settings') }}</NuxtLink></li>
           </ul>
         </div>
@@ -410,8 +411,10 @@ async function copyReferralLink() {
     // ignore
   }
 }
-const supportTarget = computed(() => (isAdmin.value ? '/admin/messages' : '/support'))
-const bellTarget = computed(() => (isAdmin.value ? '/admin/messages' : '/support'))
+// 거래소 안의 관리자 화면(/admin/…)은 막혀 있어서(첫 화면으로 돌려보냄) 관리자는 ADMIN 사이트의 고객센터로 새 탭에서 연다.
+const supportTarget = computed(() => (isAdmin.value ? ADMIN_SUPPORT_URL : '/support'))
+const bellTarget = computed(() => (isAdmin.value ? ADMIN_SUPPORT_URL : '/support'))
+const supportLinkTarget = computed(() => (isAdmin.value ? '_blank' : undefined))
 const showResetNotice = computed(
   () =>
     !isAdmin.value &&
@@ -423,6 +426,8 @@ const showResetNotice = computed(
 let navLoadingTimer: any = null
 function startNavLoading(target?: string) {
   if (target && String(target) === String(route.path)) return
+  // 다른 사이트(새 탭)로 여는 링크는 이 화면의 로딩 표시를 띄우지 않는다.
+  if (target && String(target).startsWith('http')) return
   navLoading.value = true
   // 안전장치: 이동이 끝나는 신호를 못 받아도 로딩 표시가 영원히 남지 않게 한다.
   if (process.client) {

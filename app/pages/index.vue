@@ -192,7 +192,7 @@ const flippedIdx = ref(-1)
 // (로그인 화면은 로그인에 성공하면 /exchange/SAMSUNGUSDT로 보낸다. 이미 로그인한 상태면 차트로 바로 간다.)
 const { me: landingMe } = useMe()
 // 고객지원 바로가기: 로그인 전에는 로그인 화면으로, 로그인했다면 고객지원(관리자는 쪽지관리)으로 이동한다.
-const supportLinkTarget = computed(() => (!landingMe.value ? '/auth/login' : landingMe.value.role !== 'user' ? '/admin/messages' : '/support'))
+const supportLinkTarget = computed(() => (!landingMe.value ? '/auth/login' : landingMe.value.role !== 'user' ? ADMIN_SUPPORT_URL : '/support'))
 const appButtonTarget = computed(() => (landingMe.value ? '/exchange/SAMSUNGUSDT' : '/auth/login'))
 // 앱 버튼: 로그인 전에는 로그인 화면으로, 로그인한 뒤에는 "27년 2월 출시 예정" 안내를 띄운다.
 const launchNotice = useLaunchNotice()

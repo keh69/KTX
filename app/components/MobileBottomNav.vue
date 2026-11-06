@@ -78,7 +78,12 @@ function go(item: { key: string; to: string; disabled: boolean }) {
       window.open(supportUrl.value, '_blank', 'noopener')
       return
     }
-    navigateTo(isAdmin.value ? '/admin/messages' : '/support')
+    // 관리자는 ADMIN 사이트 고객센터(새 탭) — 거래소 안의 /admin 화면은 막혀 있어 첫 화면으로 튕긴다.
+    if (isAdmin.value) {
+      window.open(ADMIN_SUPPORT_URL, '_blank', 'noopener')
+      return
+    }
+    navigateTo('/support')
     return
   }
   navigateTo(item.to)
