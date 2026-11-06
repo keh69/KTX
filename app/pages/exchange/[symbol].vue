@@ -10320,8 +10320,9 @@ watch([symbol, () => me.value?.id, isSuperAdminUser], () => restorePriceAlarms()
 onMounted(() => restorePriceAlarms())
 
 // [임시 · 보여주기용] 차트 화면 덤프오류. ADMIN > 기타 > 어드민 > 덤프오류 탭에서 ON이면, 로그인한 회원이
-// 차트 화면을 보고 있을 때 설정한 n~n초(무작위) 뒤 덤프 에러로그를 화면 전체로 띄운다(닫을 수 없음).
-// OFF로 바꾸면 30초 안에 사라지고 다시 뜨지 않는다. 내용은 utils/dumpChartError.ts가 매번 무작위로 만든다.
+// 차트 화면을 보고 있을 때 설정한 n~n초(무작위) 뒤 덤프오류 전용 페이지(/error)로 넘어간다(헤더·메뉴 없음, 닫는 버튼 없음).
+// OFF로 바꾸면 /error 페이지가 30초 안에 원래 차트로 돌아간다. 내용은 utils/dumpChartError.ts가 매번 무작위로 만든다.
+// (총관리자는 예전처럼 화면 아래 오류 배너로만 본다.)
 // 요청 시 이 블록, utils/dumpChartError.ts, AdminErrorConsole의 forced 처리를 지우면 원래대로 돌아간다.
 let dumpTimer: ReturnType<typeof setTimeout> | null = null
 let dumpPoll: ReturnType<typeof setInterval> | null = null
@@ -10349,6 +10350,15 @@ async function syncDumpChartError() {
     dumpTimer = null
     if (!me.value?.id) return
     const entry = makeDumpChartError(String(symbol.value || ''))
+    if (!isSuperAdminUser.value) {
+      // 회원: 덤프오류 전용 페이지로 이동. 새로고침해도 같은 내용이 보이게 이 탭에 잠시 보관한다.
+      try {
+        sessionStorage.setItem('ktx_dump_error', JSON.stringify({ entry, from: route.fullPath }))
+      } catch {}
+      dumpShown = true
+      navigateTo('/error')
+      return
+    }
     dumpLastError.value = entry
     dumpErrorHistory.value = [entry, ...dumpErrorHistory.value].slice(0, 20)
     dumpShown = true
