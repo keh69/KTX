@@ -13,7 +13,8 @@ export default defineEventHandler(async (event) => {
   let ranking: any[] = []
   let mine: any = null
   if (ev.kind === 'weekly_volume') {
-    const rows = await weeklyVolumeRank(from, to, 20)
+    // 회원 화면 순위표는 1~100위(한 페이지 10위씩)
+    const rows = await weeklyVolumeRank(from, to, 100)
     ranking = rows.map((r) => ({
       rank: r.rank,
       name: me && Number(me.id) === r.user_id ? r.username : maskUsername(r.username),

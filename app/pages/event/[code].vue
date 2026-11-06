@@ -165,13 +165,65 @@
                 </template>
               </div>
             </div>
-            <!-- 4위부터 -->
-            <div v-if="data.ranking.length > 3" class="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-              <div v-for="r in data.ranking.slice(3)" :key="r.rank" class="flex items-center gap-3 border-b border-white/5 px-4 py-3 last:border-b-0" :class="r.isMe ? 'bg-amber-400/10' : ''">
-                <span class="w-7 text-center font-mono text-[15px] font-bold text-slate-300">{{ r.rank }}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-[14px] text-slate-100">{{ r.name }}<span v-if="r.isMe" class="text-amber-300"> ({{ t('나', 'me') }})</span></span>
-                <span class="font-mono text-[14px] text-slate-200">{{ fmtShort(r.volume) }}</span>
-                <span class="w-20 text-right text-[12px] font-semibold text-amber-300">{{ prizeFor(r.rank) }}</span>
+            <!-- 1~100위 순위표: 한 페이지 10위씩, 옆으로 넘김(화살표·번호·밀어서 넘기기), 내 순위 강조 -->
+            <div class="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+              <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <div class="text-[14px] font-bold text-white">
+                  {{ t('전체 순위', 'Full ranking') }}
+                  <span class="ml-1 text-[12px] font-normal text-slate-400">{{ pageFrom }}~{{ pageTo }}{{ t('위', '') }} / {{ data.ranking.length }}{{ t('명', '') }}</span>
+                </div>
+                <button
+                  v-if="myRow"
+                  type="button"
+                  class="rounded-full bg-amber-400 px-3 py-1 text-[12px] font-bold text-slate-900 hover:bg-amber-300"
+                  @click="goToMyPage"
+                >
+                  {{ t('내 순위 보기', 'Jump to me') }}
+                </button>
+              </div>
+              <div class="grid grid-cols-[44px_minmax(0,1fr)_auto_84px] gap-x-3 border-b border-white/5 px-4 py-2 text-[11px] text-slate-500">
+                <span class="text-center">{{ t('순위', 'Rank') }}</span>
+                <span>{{ t('아이디', 'ID') }}</span>
+                <span class="text-right">{{ t('거래량 (USDT)', 'Volume (USDT)') }}</span>
+                <span class="text-right">{{ t('상금', 'Prize') }}</span>
+              </div>
+              <div class="evp-pages" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+                <Transition :name="slideDir === 'next' ? 'evp-slide-next' : 'evp-slide-prev'" mode="out-in">
+                  <div :key="page">
+                    <div
+                      v-for="r in pageRows"
+                      :key="r.rank"
+                      class="grid grid-cols-[44px_minmax(0,1fr)_auto_84px] items-center gap-x-3 border-b border-white/5 px-4 py-3 last:border-b-0"
+                      :class="r.isMe ? 'evp-me' : ''"
+                    >
+                      <span class="flex justify-center">
+                        <span v-if="r.rank <= 3" class="flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black" :class="medalClass(r.rank - 1)">{{ r.rank }}</span>
+                        <span v-else class="font-mono text-[15px] font-bold" :class="r.isMe ? 'text-amber-300' : 'text-slate-300'">{{ r.rank }}</span>
+                      </span>
+                      <span class="min-w-0 truncate font-mono text-[14px]" :class="r.isMe ? 'font-bold text-white' : 'text-slate-100'">
+                        {{ r.name }}<span v-if="r.isMe" class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 font-sans text-[10px] font-bold text-slate-900">{{ t('나', 'ME') }}</span>
+                      </span>
+                      <span class="text-right font-mono text-[14px]" :class="r.isMe ? 'text-white' : 'text-slate-200'">{{ fmtUsd(r.volume) }}</span>
+                      <span class="text-right text-[12px] font-semibold text-amber-300">{{ prizeFor(r.rank) || '—' }}</span>
+                    </div>
+                    <!-- 마지막 페이지가 10줄보다 적어도 표 높이가 흔들리지 않게 빈 줄을 채운다 -->
+                    <div v-for="n in PAGE_SIZE - pageRows.length" :key="'e' + n" class="h-[49px] border-b border-white/5 last:border-b-0" />
+                  </div>
+                </Transition>
+              </div>
+              <div class="flex items-center justify-center gap-1 border-t border-white/10 px-2 py-3">
+                <button type="button" class="evp-pg" :disabled="page <= 1" :aria-label="t('이전', 'Previous')" @click="setPage(page - 1)">‹</button>
+                <button
+                  v-for="n in visiblePages"
+                  :key="n"
+                  type="button"
+                  class="evp-pg"
+                  :class="[n === page ? 'evp-pg-on' : '', myPage === n && n !== page ? 'evp-pg-me' : '']"
+                  @click="setPage(n)"
+                >
+                  {{ n }}
+                </button>
+                <button type="button" class="evp-pg" :disabled="page >= pageCount" :aria-label="t('다음', 'Next')" @click="setPage(page + 1)">›</button>
               </div>
             </div>
             <p class="mt-3 text-center text-[12px] text-slate-500">{{ t('1분마다 자동으로 갱신됩니다 · 다른 회원 아이디는 일부 가려집니다', 'Refreshes every minute · other IDs are partly hidden') }}</p>
@@ -285,6 +337,67 @@ const steps = computed(() => [
   { title: t('실시간 순위 확인', 'Check the live ranking'), desc: t('이 페이지에서 내 순위를 바로 확인', 'See your rank right here') },
   { title: t('상금 지급', 'Get your prize'), desc: t('주간 마감 후 순위대로 지급', 'Paid by final ranking after the week ends') }
 ])
+
+// ── 1~100위 순위표(한 페이지 10위씩) ──
+const PAGE_SIZE = 10
+const page = ref(1)
+const slideDir = ref<'next' | 'prev'>('next')
+const rankingRows = computed(() => data.value?.ranking || [])
+const pageCount = computed(() => Math.max(1, Math.ceil(rankingRows.value.length / PAGE_SIZE)))
+const pageRows = computed(() => rankingRows.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+const pageFrom = computed(() => (rankingRows.value.length ? (page.value - 1) * PAGE_SIZE + 1 : 0))
+const pageTo = computed(() => Math.min(rankingRows.value.length, page.value * PAGE_SIZE))
+const myRow = computed(() => rankingRows.value.find((r) => r.isMe) || null)
+const myPage = computed(() => (myRow.value ? Math.ceil(myRow.value.rank / PAGE_SIZE) : 0))
+// 페이지 번호는 지금 페이지 주변 5개만(휴대폰에서도 한 줄에 들어가게)
+const visiblePages = computed(() => {
+  const total = pageCount.value
+  const start = Math.max(1, Math.min(page.value - 2, total - 4))
+  const end = Math.min(total, start + 4)
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+})
+function setPage(n: number) {
+  const next = Math.min(pageCount.value, Math.max(1, n))
+  if (next === page.value) return
+  slideDir.value = next > page.value ? 'next' : 'prev'
+  page.value = next
+}
+function goToMyPage() {
+  if (myPage.value) setPage(myPage.value)
+}
+// 처음 열었을 때 내 순위가 100위 안이면 내 페이지를 먼저 보여 준다(1분마다 새로 받아도 보던 페이지는 유지).
+let autoJumped = false
+watch(
+  rankingRows,
+  () => {
+    if (page.value > pageCount.value) page.value = pageCount.value
+    if (!autoJumped && myPage.value) {
+      autoJumped = true
+      page.value = myPage.value
+    }
+  },
+  { immediate: true }
+)
+watch(week, () => {
+  page.value = 1
+  autoJumped = false
+})
+// 휴대폰에서 표를 옆으로 밀면 다음/이전 페이지
+let touchX = 0
+let touchY = 0
+function onTouchStart(e: TouchEvent) {
+  touchX = e.touches[0]?.clientX ?? 0
+  touchY = e.touches[0]?.clientY ?? 0
+}
+function onTouchEnd(e: TouchEvent) {
+  const dx = (e.changedTouches[0]?.clientX ?? 0) - touchX
+  const dy = (e.changedTouches[0]?.clientY ?? 0) - touchY
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return
+  setPage(page.value + (dx < 0 ? 1 : -1))
+}
+function fmtUsd(v: number) {
+  return Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 const podium = computed(() => {
   const rows = data.value?.ranking || []
@@ -601,6 +714,58 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
   height: 60px;
   background: linear-gradient(180deg, rgba(224, 138, 74, 0.22), rgba(224, 138, 74, 0.04));
   border-color: rgba(224, 138, 74, 0.3);
+}
+.evp-me {
+  position: relative;
+  background: linear-gradient(90deg, rgba(255, 196, 0, 0.28), rgba(255, 196, 0, 0.08));
+  box-shadow: inset 4px 0 0 #ffc21a;
+}
+.evp-pages {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.evp-pg {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.06);
+}
+.evp-pg:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.evp-pg:disabled {
+  opacity: 0.3;
+}
+.evp-pg-on {
+  background: linear-gradient(180deg, #ffe680, #ffc21a);
+  color: #3a2400;
+}
+.evp-pg-me {
+  box-shadow: inset 0 0 0 2px #ffc21a;
+  color: #ffd23f;
+}
+.evp-slide-next-enter-active,
+.evp-slide-next-leave-active,
+.evp-slide-prev-enter-active,
+.evp-slide-prev-leave-active {
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+.evp-slide-next-enter-from,
+.evp-slide-prev-leave-to {
+  transform: translateX(40px);
+  opacity: 0;
+}
+.evp-slide-next-leave-to,
+.evp-slide-prev-enter-from {
+  transform: translateX(-40px);
+  opacity: 0;
 }
 @keyframes evp-spin {
   to {
