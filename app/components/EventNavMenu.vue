@@ -4,11 +4,11 @@
     <div v-if="!mobile" class="group relative">
       <NuxtLink
         :to="`/event/${items[0].code}`"
-        class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-amber-300 hover:bg-cyan-400/10 hover:text-amber-200"
+        class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-[#f0b90b] hover:bg-cyan-400/10 hover:text-[#f0b90b]"
         @click="$emit('navigate', `/event/${items[0].code}`)"
       >
         {{ t('이벤트', 'Events') }}
-        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+        <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[#f0b90b]" />
       </NuxtLink>
       <div v-if="items.length > 1" class="invisible absolute left-0 top-full z-50 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
         <div class="min-w-[200px] rounded-xl border border-cyan-500/10 bg-[#03101d] p-2 shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
@@ -29,7 +29,7 @@
         v-for="e in items"
         :key="e.code"
         :to="`/event/${e.code}`"
-        class="flex items-center gap-2 rounded-md px-3 py-2.5 text-amber-300 hover:bg-cyan-400/10 hover:text-amber-200"
+        class="flex items-center gap-2 rounded-md px-3 py-2.5 text-[#f0b90b] hover:bg-cyan-400/10 hover:text-[#f0b90b]"
         @click="$emit('navigate', `/event/${e.code}`)"
       >
         {{ t('이벤트', 'Event') }} · {{ label(e) }}
