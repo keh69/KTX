@@ -35,6 +35,7 @@
                 {{ t(MAIN_NAV_LABELS[key], MAIN_NAV_LABELS_EN[key]) }}
               </NuxtLink>
             </template>
+            <EventNavMenu @navigate="startNavLoading" />
             <div v-if="isAdmin && SHOW_ADMIN_MENU" class="group relative">
               <NuxtLink :to="adminHomeTarget" class="whitespace-nowrap rounded-md px-3 py-1.5 hover:bg-cyan-400/10 hover:text-white" @click="startNavLoading(adminHomeTarget)">{{ t('관리자', 'Admin') }}</NuxtLink>
               <div class="invisible absolute left-0 top-full z-50 pt-2 opacity-0 transition group-hover:visible group-hover:opacity-100">
@@ -106,6 +107,7 @@
           >
             {{ t(MAIN_NAV_LABELS[key], MAIN_NAV_LABELS_EN[key]) }}
           </NuxtLink>
+          <EventNavMenu mobile @navigate="onMobileNavClick" />
 
           <template v-if="isAdmin && SHOW_ADMIN_MENU">
             <div class="my-2 h-px bg-white/10" />
