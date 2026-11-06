@@ -10,6 +10,10 @@ export type EventRow = {
   kind: string
   title: string
   description: string
+  // 영어 화면용(비어 있으면 한국어를 그대로 보여 준다)
+  name_en?: string
+  title_en?: string
+  description_en?: string
   prizes: Array<{ rank: string; reward: string }>
   enabled: boolean
 }

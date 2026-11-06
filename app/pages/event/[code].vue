@@ -16,7 +16,7 @@
         <div class="relative mx-auto max-w-[760px] px-5 pb-10 pt-10 text-center sm:pt-14">
           <div class="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-black/40 px-4 py-1.5 text-[13px] font-semibold text-amber-200 backdrop-blur">
             <span class="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-            {{ data.event.name }} · {{ t('주간 거래 대회', 'Weekly trading contest') }}
+            {{ evName }} · {{ t('주간 거래 대회', 'Weekly trading contest') }}
           </div>
           <h1 class="evp-title mt-5 text-[34px] font-black leading-[1.15] tracking-tight text-white sm:text-[52px]">
             {{ titleLines[0] }}<br v-if="titleLines[1]" />
@@ -88,7 +88,7 @@
             <div v-for="(p, i) in data.event.prizes" :key="i" class="evp-ticket" :class="ticketClass(i)">
               <div class="evp-ticket-rank">
                 <span class="evp-medal" :class="medalClass(i)">{{ medalText(p.rank, i) }}</span>
-                <span class="text-[15px] font-bold text-white">{{ p.rank }}</span>
+                <span class="text-[15px] font-bold text-white">{{ rankLabel(p.rank) }}</span>
               </div>
               <div class="evp-ticket-amount">{{ p.reward }}</div>
             </div>
@@ -186,7 +186,7 @@
             <span class="flex h-5 w-5 items-center justify-center rounded-full border border-white/60 text-[12px]">!</span>
             {{ t('꼭 확인하세요!', 'Please note') }}
           </div>
-          <p v-if="data.event.description" class="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-slate-300">{{ data.event.description }}</p>
+          <p v-if="evDescription" class="mt-3 whitespace-pre-line text-[13px] leading-relaxed text-slate-300">{{ evDescription }}</p>
           <ul class="mt-3 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-slate-400">
             <li>{{ t('이벤트 기간은 한국시간 기준 매주 월요일 00:00 ~ 일요일 23:59입니다.', 'The event runs weekly, Monday 00:00 to Sunday 23:59 KST.') }}</li>
             <li>{{ t('거래량은 선물 거래의 체결금액(진입 + 청산, USDT) 합계로 계산합니다.', 'Volume is the sum of filled amounts (open + close, USDT) of futures trades.') }}</li>
@@ -202,13 +202,23 @@
 </template>
 
 <script setup lang="ts">
-const { t } = useLocale()
+const { t, locale } = useLocale()
 const route = useRoute()
 const code = computed(() => String(route.params.code || ''))
 const week = ref<'this' | 'last'>('this')
 
 type EventDetail = {
-  event: { code: string; name: string; kind: string; title: string; description: string; prizes: Array<{ rank: string; reward: string }> }
+  event: {
+    code: string
+    name: string
+    kind: string
+    title: string
+    description: string
+    nameEn?: string
+    titleEn?: string
+    descriptionEn?: string
+    prizes: Array<{ rank: string; reward: string }>
+  }
   period: { from: string; to: string; week: string }
   ranking: Array<{ rank: number; name: string; isMe: boolean; volume: number; trades: number }>
   mine: { rank: number | null; volume: number; trades: number } | null
@@ -220,9 +230,22 @@ const { data, pending, error, refresh } = await useFetch<EventDetail>(() => `/ap
   watch: [week]
 })
 
+// 언어에 맞는 이름/제목/설명(영어가 비어 있으면 한국어로 보여 준다)
+const isEn = computed(() => String(locale.value || '').toLowerCase().startsWith('en'))
+const evName = computed(() => (isEn.value && data.value?.event.nameEn) || data.value?.event.name || '')
+const evTitle = computed(() => (isEn.value && data.value?.event.titleEn) || data.value?.event.title || '')
+const evDescription = computed(() => (isEn.value && data.value?.event.descriptionEn) || data.value?.event.description || '')
+// 상금표의 순위 글자("1위", "4~10위")도 영어 화면에서는 "Rank 1", "Rank 4–10"으로
+function rankLabel(rank: string) {
+  if (!isEn.value) return rank
+  const r = rankRange(rank)
+  if (!r) return rank
+  return r[0] === r[1] ? `Rank ${r[0]}` : `Rank ${r[0]}–${r[1]}`
+}
+
 // 제목을 두 줄로: 마지막 낱말 묶음을 금색 강조 줄로 (예: "이번주 거래량" / "순위 이벤트")
 const titleLines = computed(() => {
-  const s = String(data.value?.event.title || '').trim()
+  const s = String(evTitle.value || '').trim()
   const words = s.split(/\s+/)
   if (words.length < 3) return [s, '']
   const cut = Math.ceil(words.length / 2)
@@ -341,7 +364,7 @@ function lastDay(iso: string) {
   return new Date(new Date(iso).getTime() - 1000).toISOString()
 }
 
-useHead({ title: computed(() => (data.value?.event?.title ? `${data.value.event.title} | KTX` : 'KTX')) })
+useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX')) })
 </script>
 
 <style scoped>

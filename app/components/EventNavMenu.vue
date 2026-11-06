@@ -19,7 +19,7 @@
             class="block rounded-lg px-3 py-2 text-[15px] text-slate-200 hover:bg-cyan-400/10 hover:text-white"
             @click="$emit('navigate', `/event/${e.code}`)"
           >
-            {{ e.title || e.name }}
+            {{ label(e) }}
           </NuxtLink>
         </div>
       </div>
@@ -32,7 +32,7 @@
         class="flex items-center gap-2 rounded-md px-3 py-2.5 text-amber-300 hover:bg-cyan-400/10 hover:text-amber-200"
         @click="$emit('navigate', `/event/${e.code}`)"
       >
-        {{ t('이벤트', 'Event') }} · {{ e.title || e.name }}
+        {{ t('이벤트', 'Event') }} · {{ label(e) }}
       </NuxtLink>
     </template>
   </template>
@@ -41,16 +41,22 @@
 <script setup lang="ts">
 defineProps<{ mobile?: boolean }>()
 defineEmits<{ (e: 'navigate', to: string): void }>()
-const { t } = useLocale()
+const { t, locale } = useLocale()
+type ActiveEvent = { code: string; name: string; title: string; nameEn?: string; titleEn?: string }
+// 영어 화면이면 영어 제목(비어 있으면 한국어)
+function label(e: ActiveEvent) {
+  const en = String(locale.value || '').toLowerCase().startsWith('en')
+  return (en && (e.titleEn || e.nameEn)) || e.title || e.name
+}
 
 // 여러 화면(헤더 두 종류, PC/모바일 메뉴)이 같이 쓰므로 한 번만 받아 공유한다.
-const items = useState<Array<{ code: string; name: string; title: string }>>('active_events', () => [])
+const items = useState<ActiveEvent[]>('active_events', () => [])
 const loaded = useState<boolean>('active_events_loaded', () => false)
 onMounted(async () => {
   if (loaded.value) return
   loaded.value = true
   try {
-    const res = await $fetch<{ items: Array<{ code: string; name: string; title: string }> }>('/api/events/active')
+    const res = await $fetch<{ items: ActiveEvent[] }>('/api/events/active')
     items.value = res.items || []
   } catch {
     items.value = []

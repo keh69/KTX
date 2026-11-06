@@ -27,7 +27,17 @@ export default defineEventHandler(async (event) => {
     }
   }
   return {
-    event: { code: ev.code, name: ev.name, kind: ev.kind, title: ev.title, description: ev.description, prizes: ev.prizes || [] },
+    event: {
+      code: ev.code,
+      name: ev.name,
+      kind: ev.kind,
+      title: ev.title,
+      description: ev.description,
+      nameEn: ev.name_en || '',
+      titleEn: ev.title_en || '',
+      descriptionEn: ev.description_en || '',
+      prizes: ev.prizes || []
+    },
     period: { from: from.toISOString(), to: to.toISOString(), week: week === -1 ? 'last' : 'this' },
     ranking,
     mine,
