@@ -928,7 +928,7 @@
           <!-- 매도(위) -->
           <div>
             <div v-for="(r, idx) in askRows" :key="'a' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#7a1d25]/45 transition-[width] duration-200 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#7a1d25]/45 transition-[width] duration-[400ms] ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#f23645]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -937,13 +937,13 @@
 
           <!-- 현재가 -->
           <div class="-mx-3 my-1 flex items-center border-y border-white/5 px-3 py-1.5 font-mono text-[17px] text-[#36f2c6]">
-            <span>{{ shownLastPrice ? Number(shownLastPrice).toFixed(2) : '—' }}</span>
+            <span>{{ (obShownPrice ?? shownLastPrice) ? Number(obShownPrice ?? shownLastPrice).toFixed(2) : '—' }}</span>
           </div>
 
           <!-- 매수(아래) -->
           <div>
             <div v-for="(r, idx) in bidRows" :key="'b' + idx" class="relative -mx-3 grid h-6 grid-cols-3 items-center gap-2 px-3 font-mono text-[12px]">
-              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#0b6b59]/45 transition-[width] duration-200 ease-linear" :style="{ width: r.depthPct + '%' }" />
+              <div v-if="r" class="absolute inset-y-0.5 left-0 bg-[#0b6b59]/45 transition-[width] duration-[400ms] ease-linear" :style="{ width: r.depthPct + '%' }" />
               <div class="relative text-[#22ab94]">{{ r ? fmtPrice(r.price + obRemoteOffset) : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.qtyText : '—' }}</div>
               <div class="relative text-right text-slate-100">{{ r ? r.totalText : '—' }}</div>
@@ -2609,9 +2609,11 @@ let orderbookRestFail = 0
 let orderbookLevelTimer: any = null
 let pendingBinanceDepth: any = null
 let pendingBinanceDepthTimer: any = null
-// 호가표(수량/총액/막대)는 0.2초에 한 번씩만 다시 그린다. 그 사이에 온 호가는 모아 두었다가 다음 0.2초 차례에 최신 상태로 한 번에 반영한다.
+// 호가표(수량/총액/막대/가운데 현재가)는 0.4초에 한 번씩만 다시 그린다. 그 사이에 온 호가는 모아 두었다가 다음 0.2초 차례에 최신 상태로 한 번에 반영한다.
 // (차트의 현재가/봉은 호가 메시지가 올 때마다 예전처럼 바로 움직인다 — 호가표 그리는 주기만 바꿈.)
-const ORDERBOOK_RENDER_INTERVAL_MS = 200
+const ORDERBOOK_RENDER_INTERVAL_MS = 400
+// 호가표 가운데 현재가(호가표와 같이 0.4초마다 바뀜)
+const obShownPrice = ref<number | null>(null)
 let pendingBinanceBook: any = null
 let pendingOkxBook: Array<{ snapshot: boolean; asks: any[]; bids: any[] }> = []
 function flushPendingOrderbook() {
@@ -9001,10 +9003,11 @@ function startOrderbookLevelMotion() {
   if (!process.client) return
   if (orderbookLevelTimer) clearTimeout(orderbookLevelTimer)
   const tick = () => {
-    // 0.2초마다: 그동안 받은 실제 호가를 한 번에 반영 → (호가가 3초 넘게 끊긴 경우에만) 대체 호가 → 빠진 줄 보충
+    // 0.4초마다: 그동안 받은 실제 호가를 한 번에 반영 → (호가가 3초 넘게 끊긴 경우에만) 대체 호가 → 빠진 줄 보충
     flushPendingOrderbook()
     simulateOrderbookLevels()
     refreshDisplayIfNeeded()
+    obShownPrice.value = Number(adminKillUiOverride.value ?? adminProfitUiOverride.value ?? lastPrice.value ?? 0) || null
     orderbookLevelTimer = setTimeout(tick, ORDERBOOK_RENDER_INTERVAL_MS)
   }
   tick()
