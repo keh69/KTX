@@ -11,11 +11,17 @@
       </div>
     </Transition>
     <Transition name="nav-loading-fade">
-      <div v-if="toast?.visible" class="fixed inset-x-0 top-3 z-[130] flex justify-center px-4">
-        <div class="flex items-center gap-2 rounded-full border border-amber-400/30 bg-[#0b1220]/95 px-4 py-2 text-sm text-amber-100 shadow-[0_10px_30px_rgba(0,0,0,0.4)]">
+      <!-- 새 쪽지 팝업: 누르면 그 쪽지(대화)를 바로 연다 -->
+      <div v-if="toast?.visible" class="pointer-events-none fixed inset-x-0 top-3 z-[130] flex justify-center px-4">
+        <button
+          type="button"
+          class="pointer-events-auto flex cursor-pointer items-center gap-2 rounded-full border border-amber-400/30 bg-[#0b1220]/95 px-4 py-2 text-sm text-amber-100 shadow-[0_10px_30px_rgba(0,0,0,0.4)] transition hover:border-amber-300/70 hover:bg-[#13203a]"
+          @click="openNewMessage"
+        >
           <span>🔔</span>
           <span>{{ toast.text }}</span>
-        </div>
+          <span class="text-xs font-semibold text-amber-300">{{ t('보기', 'View') }} ›</span>
+        </button>
       </div>
     </Transition>
     <header class="site-header font-landing sticky top-0 z-50 bg-[#020b16]/90 backdrop-blur">
@@ -196,7 +202,7 @@ const appVersion = computed(() => {
   const dateText = versionData.value.iso ? formatLongDate(versionData.value.iso) : versionData.value.date
   return me.value?.role === 'super_admin' ? `${dateText} - ${versionData.value.build}` : dateText
 })
-const { unread, toast, refreshUnread, startUnreadPolling, stopUnreadPolling } = useMessages()
+const { unread, toast, refreshUnread, startUnreadPolling, stopUnreadPolling, openNewMessage } = useMessages()
 const resetNoticeHidden = ref(false)
 if (me.value) {
   await refreshUnread()

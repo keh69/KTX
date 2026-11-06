@@ -318,4 +318,24 @@ if (me.value && me.value.role !== 'user') {
   await loadThreads()
   await refreshUnread()
 }
+
+// 상단 "새 쪽지가 도착했습니다" 팝업을 누르면 ?open= 으로 들어온다 → 이미 이 화면에 있어도 대화를 새로 불러와 바로 읽음 처리한다.
+const route = useRoute()
+const router = useRouter()
+async function openLatestThread() {
+  const res = await $fetch<{ items: ThreadSummary[] }>('/api/messages/threads', { credentials: 'include' }).catch(() => null)
+  if (res) threads.value = res.items || []
+  if (threads.value[0]) await openThread(threads.value[0], false)
+  const { open: _o, ...rest } = route.query
+  router.replace({ query: rest }).catch(() => {})
+}
+onMounted(() => {
+  if (route.query.open && me.value?.role === 'user') openLatestThread()
+})
+watch(
+  () => route.query.open,
+  (v, old) => {
+    if (process.client && v && v !== old) openLatestThread()
+  }
+)
 </script>
