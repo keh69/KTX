@@ -6408,11 +6408,13 @@ async function runProfitAnimation(ev: ProfitEvent, resume = false) {
   }
   initFromChart()
 
-  const applyPrice = (price: number) => {
+  // atMs: 이 가격이 원래 찍혀야 하는 시각. 타이머가 늦게 깨어나 밀린 점을 한꺼번에 반영할 때도 그 점이 속한 봉에 들어가게 한다
+  // (지금 시각으로 봉을 정하면, 휴대폰처럼 타이머가 느린 화면에서는 앞 봉의 마지막 점들이 다음 봉으로 넘어가 봉 모양이 달라진다).
+  const applyPrice = (price: number, atMs?: number) => {
     adminProfitUiOverride.value = price
     // 시간이 흘러 다음 봉으로 넘어가면(예: 1분봉에서 5분간 이동) 같은 봉만 계속 늘리지 않고 새 봉을 만든다.
     // 새 봉의 시가는 직전 봉의 종가(직전 틱 가격)를 이어받는다.
-    const bucket = barBucketStart(Math.floor(Date.now() / 1000), barSeconds(timeframe.value))
+    const bucket = barBucketStart(Math.floor((Number.isFinite(atMs) ? Number(atMs) : Date.now()) / 1000), barSeconds(timeframe.value))
     if (bucket > Number(time) && candleSeries) {
       time = bucket as any
       openPrice = prevApplied
@@ -6447,8 +6449,14 @@ async function runProfitAnimation(ev: ProfitEvent, resume = false) {
     // 각 점은 "시작 시각 + 점의 시각"에 맞춰 예약한다(앞 점과의 간격만큼 계속 더하면 PC가 느릴 때 오차가 쌓여 전체가 길어진다).
     const startWall = Date.now() - (fromT != null ? Math.max(fromT, points[i].t) : points[i].t)
     const step = () => {
-      applyPrice(mapPrice ? mapPrice(points[i].price, points[i].t) : points[i].price)
-      i += 1
+      // 휴대폰(절전·화면 꺼짐·느린 기기)에서는 타이머가 1초에 한 번처럼 늦게 깨어날 수 있다. 예전엔 깨어날 때마다 점을 하나씩만 반영해서
+      // 경로가 점점 뒤처지고, 봉이 끝날 때 종가까지 못 가 PC와 봉 모양이 달라졌다. 이제 그동안 지났어야 할 점들을 순서대로 한꺼번에 반영한다.
+      const now = Date.now()
+      do {
+        const pt = points[i]
+        applyPrice(mapPrice ? mapPrice(pt.price, pt.t) : pt.price, startWall + pt.t)
+        i += 1
+      } while (i < points.length && startWall + points[i].t <= now)
       if (i < points.length) {
         adminProfitTimer = setTimeout(step, Math.max(0, startWall + points[i].t - Date.now()))
       } else {
@@ -6526,7 +6534,7 @@ async function runProfitAnimation(ev: ProfitEvent, resume = false) {
       if (replaySkipped) {
         for (const p of built.points) {
           if (p.t >= nowT) break
-          applyPrice(p.price)
+          applyPrice(p.price, runStartWall + p.t)
         }
       }
       playPoints(
