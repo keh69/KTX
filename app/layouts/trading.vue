@@ -76,12 +76,8 @@
               {{ appVersion }}
             </span>
             <template v-if="me">
-              <NuxtLink to="/profile" class="hidden sm:inline text-slate-300 underline-offset-4 hover:text-white hover:underline" @click="startNavLoading('/profile')">
-                {{ me.name || me.username }}
-              </NuxtLink>
-              <button class="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 hover:bg-white/10" @click="logout">
-                {{ t('로그아웃', 'Log Out') }}
-              </button>
+              <!-- 이름 + 로그아웃 버튼 대신 사람 아이콘(마우스를 올리면 아이디 / 내 정보 / 로그아웃) -->
+              <UserMenu @navigate="startNavLoading" @logout="logout" />
             </template>
             <template v-else>
               <NuxtLink to="/auth/login" class="px-2 py-1.5 font-medium text-amber-400 hover:text-amber-300" @click="startNavLoading('/auth/login')">{{ t('로그인', 'Login') }}</NuxtLink>
