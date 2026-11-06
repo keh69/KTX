@@ -23,33 +23,10 @@
             <span v-if="titleLines[1]" class="evp-gold">{{ titleLines[1] }}</span>
           </h1>
 
-          <!-- 트로피 -->
-          <div class="relative mx-auto mt-6 h-[190px] w-[220px] sm:h-[230px] sm:w-[260px]">
+          <!-- 트로피(픽셀아트): 33×40칸 그림을 정수배(6배/7배)로 키워 칸 경계가 흐려지지 않게 한다 -->
+          <div class="relative mx-auto mt-6 h-[240px] w-[198px] sm:h-[280px] sm:w-[231px]">
             <div class="evp-glow" />
-            <span class="evp-coin evp-coin-l">$</span>
-            <span class="evp-coin evp-coin-r">$</span>
-            <svg viewBox="0 0 200 180" class="evp-trophy relative h-full w-full" aria-hidden="true">
-              <defs>
-                <linearGradient id="evpGold" x1="0" x2="1" y1="0" y2="1">
-                  <stop offset="0" stop-color="#fff3b0" />
-                  <stop offset="0.35" stop-color="#ffd23f" />
-                  <stop offset="0.7" stop-color="#e09b0e" />
-                  <stop offset="1" stop-color="#9a5f00" />
-                </linearGradient>
-                <linearGradient id="evpGoldDark" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stop-color="#d48a00" />
-                  <stop offset="1" stop-color="#7a4700" />
-                </linearGradient>
-              </defs>
-              <path d="M52 30 C20 30 18 78 60 86" fill="none" stroke="url(#evpGold)" stroke-width="10" stroke-linecap="round" />
-              <path d="M148 30 C180 30 182 78 140 86" fill="none" stroke="url(#evpGold)" stroke-width="10" stroke-linecap="round" />
-              <path d="M50 18 H150 V52 C150 92 126 112 100 112 C74 112 50 92 50 52 Z" fill="url(#evpGold)" />
-              <path d="M62 24 H82 V58 C82 82 90 96 98 104 C76 100 62 82 62 58 Z" fill="#fff8d6" opacity="0.55" />
-              <rect x="90" y="110" width="20" height="22" fill="url(#evpGoldDark)" />
-              <path d="M66 132 H134 L142 152 H58 Z" fill="url(#evpGold)" />
-              <rect x="50" y="152" width="100" height="14" rx="3" fill="url(#evpGoldDark)" />
-              <path d="M100 40 L106 54 L121 55 L109 64 L113 79 L100 70 L87 79 L91 64 L79 55 L94 54 Z" fill="#fff6c8" />
-            </svg>
+            <PixelTrophy class="evp-trophy relative h-full w-full" />
           </div>
 
           <div class="mt-4 text-[15px] font-semibold text-amber-100/90">{{ t('이번 주 총상금', 'Total prize this week') }}</div>
@@ -523,32 +500,9 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
   filter: blur(10px);
 }
 .evp-trophy {
-  animation: evp-bob 3.2s ease-in-out infinite;
+  image-rendering: pixelated;
+  animation: evp-bob-pixel 2.4s steps(1, end) infinite;
   filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.5));
-}
-.evp-coin {
-  position: absolute;
-  z-index: 1;
-  display: flex;
-  width: 42px;
-  height: 42px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  border: 3px solid #b77400;
-  background: radial-gradient(circle at 35% 30%, #fff3b0, #f6b40e 60%, #b77400);
-  color: #7a4700;
-  font-weight: 900;
-  animation: evp-bob 2.6s ease-in-out infinite;
-}
-.evp-coin-l {
-  left: -6px;
-  top: 40%;
-}
-.evp-coin-r {
-  right: -2px;
-  top: 12%;
-  animation-delay: 0.8s;
 }
 .evp-cta {
   background: linear-gradient(180deg, #ffe680 0%, #ffc21a 55%, #e89a00 100%);
@@ -784,6 +738,19 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
     transform: translateY(-8px);
   }
 }
+@keyframes evp-bob-pixel {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  25%,
+  75% {
+    transform: translateY(-6px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
 @keyframes evp-float {
   0%,
   100% {
@@ -796,8 +763,7 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
 @media (prefers-reduced-motion: reduce) {
   .evp-rays,
   .evp-confetti,
-  .evp-trophy,
-  .evp-coin {
+  .evp-trophy {
     animation: none;
   }
 }
