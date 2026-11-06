@@ -768,3 +768,39 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
   }
 }
 </style>
+
+<style>
+/* 이벤트 페이지는 화이트 테마에서도 필터 없이(theme-native) 그린다. theme-native는 사이트 전체의 흰 글씨/옅은 테두리를
+   어두운 색으로 바꾸는 규칙이 있어서, 어두운 프로모션 화면 안(.evp)에서는 원래 색으로 되돌린다. */
+html.theme-native .evp .text-white,
+html.theme-native .evp .hover:text-white:hover {
+  color: #ffffff !important;
+}
+html.theme-native .evp .text-slate-100 {
+  color: #f1f5f9 !important;
+}
+html.theme-native .evp .text-slate-200 {
+  color: #e2e8f0 !important;
+}
+html.theme-native .evp .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+html.theme-native .evp .text-slate-400 {
+  color: #94a3b8 !important;
+}
+html.theme-native .evp .text-slate-500 {
+  color: #64748b !important;
+}
+html.theme-native .evp .bg-white/10 {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+html.theme-native .evp .hover:bg-white/15:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+html.theme-native .evp .border-white/10 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+html.theme-native .evp .border-white/5 {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+</style>

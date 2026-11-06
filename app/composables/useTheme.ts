@@ -6,9 +6,10 @@ const THEME_STORAGE_KEY = 'bitduck_theme_v2' // _v2: 예전에 저장된 테마 
 // 화이트 테마는 두 가지 방식으로 그린다.
 // - theme-native: 첫 화면('/')과 헤더/푸터. 필터 없이 실제 색(포커스 색 #f0b90b 등)으로 칠한다.
 // - theme-filter: 나머지 페이지. 어두운 화면을 반전(invert)해서 화이트로 만든다(반전 필터로는 #f0b90b 같은 선명한 노랑을 정확히 낼 수 없다).
-// 필터 없이 실제 색으로 칠하는 화면: 첫 화면, 로그인/가입(/auth/*), 약관(/legal/*), 마켓 목록(/markets)
+// 필터 없이 실제 색으로 칠하는 화면: 첫 화면, 로그인/가입(/auth/*), 약관(/legal/*), 마켓 목록(/markets), 이벤트(/event/*)
+// (이벤트 페이지는 어두운 배경 + 선명한 금색 프로모션 화면이라 반전 필터를 거치면 금색이 탁해진다 → 필터 없이 원래 색으로 그린다)
 export function isNativeThemePath(p: string) {
-  return p === '/' || p === '/markets' || p === '/buy' || p.startsWith('/auth/') || p.startsWith('/legal')
+  return p === '/' || p === '/markets' || p === '/buy' || p.startsWith('/auth/') || p.startsWith('/legal') || p.startsWith('/event/')
 }
 
 export function applyThemeClasses(light: boolean) {
