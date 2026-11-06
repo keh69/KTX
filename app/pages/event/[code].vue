@@ -188,8 +188,8 @@
                 <span class="text-right">{{ t('상금', 'Prize') }}</span>
               </div>
               <div class="evp-pages" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
-                <Transition :name="slideDir === 'next' ? 'evp-slide-next' : 'evp-slide-prev'" mode="out-in">
-                  <div :key="page">
+                <!-- 넘길 때 옆에서 밀려 들어오는 효과(위치만 움직여서, 효과가 멈춰도 내용은 항상 보인다) -->
+                <div :key="page" :class="slideDir === 'next' ? 'evp-slide-in-next' : 'evp-slide-in-prev'">
                     <div
                       v-for="r in pageRows"
                       :key="r.rank"
@@ -208,8 +208,7 @@
                     </div>
                     <!-- 마지막 페이지가 10줄보다 적어도 표 높이가 흔들리지 않게 빈 줄을 채운다 -->
                     <div v-for="n in PAGE_SIZE - pageRows.length" :key="'e' + n" class="h-[49px] border-b border-white/5 last:border-b-0" />
-                  </div>
-                </Transition>
+                </div>
               </div>
               <div class="flex items-center justify-center gap-1 border-t border-white/10 px-2 py-3">
                 <button type="button" class="evp-pg" :disabled="page <= 1" :aria-label="t('이전', 'Previous')" @click="setPage(page - 1)">‹</button>
@@ -749,23 +748,27 @@ useHead({ title: computed(() => (evTitle.value ? `${evTitle.value} | KTX` : 'KTX
   box-shadow: inset 0 0 0 2px #ffc21a;
   color: #ffd23f;
 }
-.evp-slide-next-enter-active,
-.evp-slide-next-leave-active,
-.evp-slide-prev-enter-active,
-.evp-slide-prev-leave-active {
-  transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
+.evp-slide-in-next {
+  animation: evp-in-next 0.22s ease-out;
 }
-.evp-slide-next-enter-from,
-.evp-slide-prev-leave-to {
-  transform: translateX(40px);
-  opacity: 0;
+.evp-slide-in-prev {
+  animation: evp-in-prev 0.22s ease-out;
 }
-.evp-slide-next-leave-to,
-.evp-slide-prev-enter-from {
-  transform: translateX(-40px);
-  opacity: 0;
+@keyframes evp-in-next {
+  from {
+    transform: translateX(28px);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes evp-in-prev {
+  from {
+    transform: translateX(-28px);
+  }
+  to {
+    transform: none;
+  }
 }
 @keyframes evp-spin {
   to {
