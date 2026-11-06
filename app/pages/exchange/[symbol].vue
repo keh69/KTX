@@ -5003,6 +5003,44 @@ function fillFlatCandlesFromLive(candles: CandlestickData[], intervalSeconds: nu
   }
 }
 
+// ───── 차트 그리기 주기(0.2초) ─────
+// 실시간 틱이 올 때마다 봉 값(시가/고가/저가/종가, 거래량)은 바로 계산해 두고(꼬리가 빠지지 않게),
+// 차트에 다시 그리는 것만 0.2초에 한 번씩 한다. 그릴 때는 항상 "지금 최신 봉"을 그린다.
+const CHART_RENDER_INTERVAL_MS = 200
+let chartCandleDirty = false
+let chartVolDirtyTime: number | null = null
+let chartDrawTimer: any = null
+function flushChartDraw() {
+  if (chartDrawTimer) clearTimeout(chartDrawTimer)
+  chartDrawTimer = null
+  if (chartCandleDirty) {
+    chartCandleDirty = false
+    const live: any = liveLastCandle.value
+    const lastData: any = candleData.value[candleData.value.length - 1]
+    // 봉 목록이 바뀐 뒤(종목/시간 단위 변경 등)엔 옛 봉을 그리지 않는다.
+    if (candleSeries && live && lastData && Number(live.time) === Number(lastData.time)) {
+      try { candleSeries.update(live) } catch {}
+    }
+    updateVisibleHighLow()
+  }
+  if (chartVolDirtyTime !== null) {
+    const t = chartVolDirtyTime
+    chartVolDirtyTime = null
+    const vs = volumeData.value as any[]
+    const v = vs.length ? vs[vs.length - 1] : null
+    if (v && Number(v.time) === t) {
+      try { volumeSeries?.update(v) } catch {}
+    }
+  }
+}
+function scheduleChartDraw() {
+  if (chartDrawTimer) return
+  chartDrawTimer = setTimeout(() => {
+    chartDrawTimer = null
+    flushChartDraw()
+  }, CHART_RENDER_INTERVAL_MS)
+}
+
 function updateLiveCandle(price: number, tsMs: number) {
   // 관리자 킬 버튼 동작 중에는 실시간 업데이트로 "튀는 효과"가 즉시 덮어써지지 않게 잠깐 멈춤
   if (adminKillFreezeUntil && Date.now() < adminKillFreezeUntil) return
@@ -5032,6 +5070,8 @@ function updateLiveCandle(price: number, tsMs: number) {
 
   // 새 캔들 생성 (시가는 직전 봉 종가를 그대로 물려받고, 고가/저가는 시가까지 감싸도록 잡는다)
   if (!last || Number((last as any).time) !== bucket) {
+    // 지난 봉의 마지막 모습(아직 안 그린 것)을 먼저 그려 두고 새 봉으로 넘어간다.
+    flushChartDraw()
     const open = last ? Number((last as any).close) : p
     const next: CandlestickData = { time, open, high: Math.max(open, p), low: Math.min(open, p), close: p }
     liveLastCandle.value = next
@@ -5056,10 +5096,11 @@ function updateLiveCandle(price: number, tsMs: number) {
   }
   liveLastCandle.value = updated
   if (candleData.value.length) candleData.value[candleData.value.length - 1] = updated
-  candleSeries.update(updated)
+  // 차트에는 0.2초마다 한 번 그린다(값은 위에서 바로 갱신됨).
+  chartCandleDirty = true
+  scheduleChartDraw()
   // 예전엔 여기서 거래량을 매번 0으로 덮어써서, 봉이 끝나 확정값을 받을 때에야 거래량이 "틱" 하고 생겼다.
   setLiveVolumeBar(time, currentBarVolume(bucket), p >= updated.open ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)')
-  updateVisibleHighLow()
 }
 
 // ───── 실시간 거래량 ─────
@@ -5081,13 +5122,20 @@ function currentBarVolume(bucket: number) {
 }
 
 function setLiveVolumeBar(time: any, value: number, color: string) {
-  try {
-    volumeSeries?.update({ time, value, color } as any)
-  } catch {}
+  // 다른 봉의 거래량이 아직 안 그려진 채 남아 있으면 그것부터 그린다(지난 봉 거래량이 빠지지 않게).
+  if (chartVolDirtyTime !== null && chartVolDirtyTime !== Number(time)) flushChartDraw()
   const vs = volumeData.value as any[]
   const lastVol = vs.length ? vs[vs.length - 1] : null
   if (lastVol && Number(lastVol.time) === Number(time)) vs[vs.length - 1] = { time, value, color }
   else if (!lastVol || Number(lastVol.time) < Number(time)) vs.push({ time, value, color })
+  else {
+    // 더 지난 봉(목록 중간)의 값: 그 자리에서 바로 그린다.
+    try { volumeSeries?.update({ time, value, color } as any) } catch {}
+    return
+  }
+  // 차트에는 0.2초마다 한 번 그린다.
+  chartVolDirtyTime = Number(time)
+  scheduleChartDraw()
 }
 
 // 캔들을 새로 받으면 진행 중인 봉 거래량은 거래소 집계값과 지금까지 실시간으로 더한 값 중 큰 쪽으로 맞춘다
@@ -10242,6 +10290,10 @@ onBeforeUnmount(() => {
   orderbookWatchTimer = null
   if (orderbookLevelTimer) clearTimeout(orderbookLevelTimer)
   orderbookLevelTimer = null
+  if (chartDrawTimer) clearTimeout(chartDrawTimer)
+  chartDrawTimer = null
+  chartCandleDirty = false
+  chartVolDirtyTime = null
   if (accountWatchTimer) clearInterval(accountWatchTimer)
   accountWatchTimer = null
   document.removeEventListener('visibilitychange', onAccountVisibility)
