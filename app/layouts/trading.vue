@@ -282,7 +282,8 @@ async function loadMainNavConfig() {
       merged.splice(at + 1, 0, k)
     })
     const hidden = new Set((data.hidden || []).filter((k) => known.has(k as MainNavKey)))
-    orderedMainNavKeys.value = merged.filter((k) => !hidden.has(k))
+    // 고객센터는 메뉴구성의 숨김/순서와 상관없이 항상 맨 끝(투자내역 다음, 이벤트 바로 앞)에 둔다.
+    orderedMainNavKeys.value = [...merged.filter((k) => !hidden.has(k) && k !== 'support'), 'support']
   } catch {
     // 기본 순서 유지
   }
