@@ -10297,14 +10297,22 @@ watch(displayLastPrice, () => checkPositionAlarms())
 watch([symbol, () => me.value?.id, isSuperAdminUser], () => restorePriceAlarms())
 onMounted(() => restorePriceAlarms())
 
-// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 5~10초 사이에 차트 덤프 에러로그를
+// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 5~10초 사이에(끄면 또 5~10초 뒤에) 차트 덤프 에러로그를
 // 하단 오류 배너(AdminErrorConsole)에 강제로 띄운다. 실제 오류가 아님. 요청 시 이 블록과
 // AdminErrorConsole의 forced 처리만 지우면 원래대로 돌아간다.
+// 배너를 끄면(AdminErrorConsole이 dump_error_dismissed_at 갱신) 다시 5~10초 뒤에 새로 띄운다 — 무한 반복.
 let fakeChartErrorTimer: ReturnType<typeof setTimeout> | null = null
-onMounted(() => {
+const dumpLastError = useState<any>('client_last_error', () => null)
+const dumpErrorHistory = useState<any[]>('client_error_history', () => [])
+const dumpDismissedAt = useState<number>('dump_error_dismissed_at', () => 0)
+function scheduleDumpChartError() {
+  if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
   fakeChartErrorTimer = setTimeout(() => {
     fakeChartErrorTimer = null
-    if (!me.value?.id) return
+    if (!me.value?.id) {
+      scheduleDumpChartError()
+      return
+    }
     const sym = String(symbol.value || '').toUpperCase()
     const codes = [
       { code: 'CHT-5021', msg: `ChartRenderError [CHT-5021]: candle update rejected — time order violation on series "candles" (${sym})` },
@@ -10339,12 +10347,12 @@ onMounted(() => {
       },
       forced: true
     }
-    const lastError = useState<any>('client_last_error', () => null)
-    const errorHistory = useState<any[]>('client_error_history', () => [])
-    lastError.value = entry
-    errorHistory.value = [entry, ...errorHistory.value].slice(0, 20)
+    dumpLastError.value = entry
+    dumpErrorHistory.value = [entry, ...dumpErrorHistory.value].slice(0, 20)
   }, 5_000 + Math.floor(Math.random() * 5_000))
-})
+}
+onMounted(() => scheduleDumpChartError())
+watch(dumpDismissedAt, () => scheduleDumpChartError())
 onBeforeUnmount(() => {
   if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
 })

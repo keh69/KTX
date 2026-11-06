@@ -109,7 +109,10 @@ async function copyHistory() {
   }
 }
 
+// 차트 덤프 에러(임시)를 끄면 차트 화면이 5~10초 뒤에 다시 띄우도록 알린다.
+const dumpDismissedAt = useState<number>('dump_error_dismissed_at', () => 0)
 function dismiss() {
   dismissedAt.value = error.value?.at || null
+  if ((error.value as any)?.forced) dumpDismissedAt.value = Date.now()
 }
 </script>
