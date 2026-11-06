@@ -1081,7 +1081,7 @@
             </div>
 
             <div class="mt-1 flex items-center justify-between text-[12px] text-slate-400">
-              <span class="font-mono">{{ qtyText }} {{ coinUnit }}</span>
+              <span class="font-mono">{{ qtyTextShown }} {{ coinUnit }}</span>
             </div>
             <div class="relative mt-2">
               <div
@@ -1313,7 +1313,7 @@
                 </button>
                 <span v-else>{{ fmtQty2(p.symbol, p.qty) }}</span>
               </td>
-              <td class="py-1 font-mono">{{ markOf(p.symbol) ? fmtPrice2(markOf(p.symbol)) : '—' }}</td>
+              <td class="py-1 font-mono">{{ markShown(p.symbol) ? fmtPrice2(markShown(p.symbol)) : '—' }}</td>
               <td class="py-1 font-mono">{{ fmtPrice2(calcLiqPrice(p)) }}</td>
               <td class="py-1 font-mono">
                 <button
@@ -1327,8 +1327,8 @@
                 <span v-else>{{ Number(p.margin).toFixed(2) }}</span>
               </td>
               <td class="py-1">
-                <div class="font-mono" :class="unrealized(p).pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'">
-                  {{ unrealized(p).pnl >= 0 ? '+' : '' }}{{ unrealized(p).pnl.toFixed(2) }}
+                <div class="font-mono" :class="unrealizedShown(p).pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'">
+                  {{ unrealizedShown(p).pnl >= 0 ? '+' : '' }}{{ unrealizedShown(p).pnl.toFixed(2) }}
                 </div>
                 <div class="text-[12px] text-slate-400">
                   <button
@@ -1337,9 +1337,9 @@
                     class="cursor-pointer font-mono hover:text-cyan-300"
                     @click="openPositionEditModal(p, 'roe')"
                   >
-                    {{ unrealized(p).roe >= 0 ? '+' : '' }}{{ unrealized(p).roe.toFixed(2) }}%
+                    {{ unrealizedShown(p).roe >= 0 ? '+' : '' }}{{ unrealizedShown(p).roe.toFixed(2) }}%
                   </button>
-                  <span v-else>{{ unrealized(p).roe >= 0 ? '+' : '' }}{{ unrealized(p).roe.toFixed(2) }}%</span>
+                  <span v-else>{{ unrealizedShown(p).roe >= 0 ? '+' : '' }}{{ unrealizedShown(p).roe.toFixed(2) }}%</span>
                 </div>
               </td>
               <td class="py-1">
@@ -3967,6 +3967,16 @@ function fmtNum(v: number) {
   return v.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
+// 화면에 보이는 현재가(포지션 표 시장가·미실현손익)는 차트와 같은 0.2초 시계에 맞춰 바꾼다. 청산·알림 계산은 markOf/unrealized(실시간) 그대로.
+const sampledMark = ref(0)
+function markShown(sym: string) {
+  const s = String(sym || '').toUpperCase()
+  if (s && s === String(symbol.value || '').toUpperCase() && sampledMark.value > 0) return sampledMark.value
+  return markOf(sym)
+}
+function unrealizedShown(p: any) {
+  return unrealized(p, markShown(p.symbol))
+}
 function markOf(sym: string) {
   const s = String(sym || '').toUpperCase()
   if (!s) return Number(adminKillUiOverride.value ?? adminProfitUiOverride.value ?? lastPrice.value ?? 0)
@@ -5075,6 +5085,7 @@ function flushChartDraw() {
 function chartUiTick() {
   flushChartDraw()
   sampledLastPrice.value = lastPrice.value ?? null
+  sampledMark.value = Number(markOf(symbol.value)) || 0
   const c: any = liveLastCandle.value || candleData.value[candleData.value.length - 1]
   const vs = volumeData.value as any[]
   const next = c
@@ -7157,8 +7168,8 @@ function calcLiqPrice(p: any) {
   return entry * (1 - LIQUIDATION_TRIGGER_FRACTION / lev)
 }
 
-function unrealized(p: any) {
-  const mark = Number(markOf(p.symbol) ?? 0)
+function unrealized(p: any, markOverride?: number) {
+  const mark = Number(markOverride ?? markOf(p.symbol) ?? 0)
   const entry = Number(p.entry_price)
   const qty = Number(p.qty)
   const grossMargin = Number(p.margin || 0)
@@ -7346,6 +7357,17 @@ const qtyText = computed(() => {
   const lev = Number(leverage.value || 1)
   if (!price || !m) return '0.0000'
   // 수수료 정책: 입력 금액(gross)에서 4%를 뗀 net 기준으로 수량 계산
+  const net = m * (1 - TRADE_FEE_RATE)
+  const qty = (net * lev) / price
+  return qty.toFixed(price < 1 ? 2 : 6)
+})
+
+// 주문창 "비중/수량"에 보이는 수량도 0.2초마다만 바뀌게(실제 주문 수량 계산은 주문하는 순간의 실시간 가격으로 따로 한다)
+const qtyTextShown = computed(() => {
+  const price = orderType.value === 'limit' && limitPriceValid.value ? Number(String(limitPriceDraft.value).replace(/,/g, '')) : Number(shownLastPrice.value || 0)
+  const m = Number(marginUsdt.value || 0)
+  const lev = Number(leverage.value || 1)
+  if (!price || !m) return '0.0000'
   const net = m * (1 - TRADE_FEE_RATE)
   const qty = (net * lev) / price
   return qty.toFixed(price < 1 ? 2 : 6)
