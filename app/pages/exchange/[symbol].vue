@@ -10319,87 +10319,49 @@ watch(displayLastPrice, () => checkPositionAlarms())
 watch([symbol, () => me.value?.id, isSuperAdminUser], () => restorePriceAlarms())
 onMounted(() => restorePriceAlarms())
 
-// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 5~10초 사이에(끄면 또 5~10초 뒤에) 차트 덤프 에러로그를
-// 하단 오류 배너(AdminErrorConsole)에 강제로 띄운다. 실제 오류가 아님. 요청 시 이 블록과
-// AdminErrorConsole의 forced 처리만 지우면 원래대로 돌아간다.
-// 배너를 끄면(AdminErrorConsole이 dump_error_dismissed_at 갱신) 다시 5~10초 뒤에 새로 띄운다 — 무한 반복.
-let fakeChartErrorTimer: ReturnType<typeof setTimeout> | null = null
+// [임시 · 보여주기용] 차트 화면 덤프오류. ADMIN > 기타 > 어드민 > 덤프오류 탭에서 ON이면, 로그인한 회원이
+// 차트 화면을 보고 있을 때 설정한 n~n초(무작위) 뒤 덤프 에러로그를 화면 전체로 띄운다(닫을 수 없음).
+// OFF로 바꾸면 30초 안에 사라지고 다시 뜨지 않는다. 내용은 utils/dumpChartError.ts가 매번 무작위로 만든다.
+// 요청 시 이 블록, utils/dumpChartError.ts, AdminErrorConsole의 forced 처리를 지우면 원래대로 돌아간다.
+let dumpTimer: ReturnType<typeof setTimeout> | null = null
+let dumpPoll: ReturnType<typeof setInterval> | null = null
+let dumpShown = false
 const dumpLastError = useState<any>('client_last_error', () => null)
 const dumpErrorHistory = useState<any[]>('client_error_history', () => [])
-const dumpDismissedAt = useState<number>('dump_error_dismissed_at', () => 0)
-function scheduleDumpChartError() {
-  if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
-  fakeChartErrorTimer = setTimeout(() => {
-    fakeChartErrorTimer = null
-    if (!me.value?.id) {
-      scheduleDumpChartError()
-      return
-    }
-    const sym = String(symbol.value || '').toUpperCase()
-    // 매번 내용이 달라지도록 코드/메시지/스택/데이터를 모두 무작위로 조합한다.
-    const ri = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1))
-    const rp = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]!
-    const hex = (n: number) => Array.from({ length: n }, () => '0123456789abcdef'[ri(0, 15)]).join('')
-    const shuffle = <T,>(arr: T[]) => [...arr].sort(() => Math.random() - 0.5)
-    const tfs = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d']
-    const tf = rp(tfs)
-    const now = Math.floor(Date.now() / 1000)
-    const templates = [
-      { cls: 'ChartRenderError', pre: 'CHT-5', msg: () => `candle update rejected — time order violation on series "${rp(['candles', 'volume', 'ma7', 'ma25', 'ma99', 'boll'])}" (${sym} ${tf})` },
-      { cls: 'ChartDataError', pre: 'CHT-4', msg: () => `kline snapshot checksum mismatch (${sym} ${tf}) — expected 0x${hex(8)}, got 0x${hex(8)}` },
-      { cls: 'ChartCanvasError', pre: 'CHT-5', msg: () => `${rp(['WebGL context lost', 'canvas buffer overflow', 'offscreen canvas detached', 'pixel ratio mismatch'])} while drawing ${rp(['price scale', 'time scale', 'crosshair', 'grid layer', 'pane #' + ri(0, 3)])} (${sym})` },
-      { cls: 'ChartStreamError', pre: 'CHT-4', msg: () => `tick stream desync — sequence gap ${ri(2, 480)} detected (${sym}@${tf})` },
-      { cls: 'ChartScaleError', pre: 'CHT-6', msg: () => `price range invalid: min=${(Math.random() * 1000).toFixed(ri(2, 6))} max=NaN (autoscale, ${sym})` },
-      { cls: 'ChartWorkerError', pre: 'CHT-7', msg: () => `indicator worker #${ri(1, 8)} terminated unexpectedly (exit ${rp([1, 134, 137, 139])}) while computing ${rp(['RSI', 'MACD', 'BOLL', 'EMA', 'KDJ', 'VWAP'])}` },
-      { cls: 'ChartSyncError', pre: 'CHT-4', msg: () => `bar merge conflict at t=${now - ri(1, 900) * 60}: open/close out of high/low bounds (${sym} ${tf})` },
-      { cls: 'ChartMemoryError', pre: 'CHT-8', msg: () => `series buffer exceeded ${rp([4096, 8192, 16384, 32768])} bars — dropped ${ri(12, 2400)} points (${sym})` }
-    ]
-    const t = rp(templates)
-    const code = `${t.pre}${String(ri(0, 999)).padStart(3, '0')}`
-    const msg = `${t.cls} [${code}]: ${t.msg()}`
-    const frames = shuffle([
-      `CandlestickSeries.update (chart-core.mjs:${ri(1000, 9999)}:${ri(5, 60)})`,
-      `SeriesApi.applyBar (chart-core.mjs:${ri(1000, 9999)}:${ri(5, 60)})`,
-      `PaneRenderer.draw (chart-render.mjs:${ri(100, 4999)}:${ri(5, 60)})`,
-      `PriceScale.recalculate (chart-scale.mjs:${ri(100, 2999)}:${ri(5, 60)})`,
-      `TimeScale.setBarSpacing (chart-scale.mjs:${ri(100, 2999)}:${ri(5, 60)})`,
-      `KlineFeed.flush (kline-feed.ts:${ri(50, 400)}:${ri(5, 40)})`,
-      `KlineFeed.onTick (kline-feed.ts:${ri(50, 400)}:${ri(5, 40)})`,
-      `IndicatorWorker.postMessage (indicator-worker.ts:${ri(20, 300)}:${ri(5, 40)})`,
-      `BarMerger.merge (bar-merger.ts:${ri(20, 300)}:${ri(5, 40)})`,
-      `requestAnimationFrame (chart-loop.mjs:${ri(10, 200)}:${ri(5, 40)})`
-    ]).slice(0, ri(4, 8))
-    const entry = {
-      at: new Date().toISOString(),
-      type: rp(['window', 'promise', 'vue'] as const),
-      url: window.location.href,
-      message: msg,
-      stack: [`Error: ${msg}`, ...frames.map((f) => `    at ${f}`), `    at WebSocket.<anonymous> (market-stream.ts:${ri(40, 200)}:${ri(5, 40)})`].join('\n'),
-      data: {
-        code,
-        symbol: sym,
-        interval: tf,
-        lastBarTime: now - ri(1, 30) * 60,
-        incomingBarTime: now - ri(31, 120) * 60,
-        seq: ri(100000, 999999),
-        traceId: `${hex(8)}-${hex(4)}-${hex(4)}-${hex(12)}`,
-        retry: ri(0, 5),
-        bars: ri(300, 5000),
-        renderer: rp(['canvas2d', 'webgl', 'webgl2']),
-        heapUsedMB: ri(80, 900),
-        fps: ri(3, 58),
-        dpr: window.devicePixelRatio || 1
-      },
-      forced: true
-    }
+async function syncDumpChartError() {
+  let cfg = { enabled: false, minSec: 5, maxSec: 10 }
+  try {
+    cfg = await $fetch<typeof cfg>('/api/settings/dump-error')
+  } catch {
+    return
+  }
+  if (!cfg.enabled) {
+    if (dumpTimer) clearTimeout(dumpTimer)
+    dumpTimer = null
+    if (dumpShown && dumpLastError.value?.forced) dumpLastError.value = null
+    dumpShown = false
+    return
+  }
+  if (dumpShown || dumpTimer) return
+  const minMs = Math.max(0, Number(cfg.minSec) || 0) * 1000
+  const maxMs = Math.max(minMs, (Number(cfg.maxSec) || 0) * 1000)
+  dumpTimer = setTimeout(() => {
+    dumpTimer = null
+    if (!me.value?.id) return
+    const entry = makeDumpChartError(String(symbol.value || ''))
     dumpLastError.value = entry
     dumpErrorHistory.value = [entry, ...dumpErrorHistory.value].slice(0, 20)
-  }, 5_000 + Math.floor(Math.random() * 5_000))
+    dumpShown = true
+  }, minMs + Math.floor(Math.random() * (maxMs - minMs + 1)))
 }
-onMounted(() => scheduleDumpChartError())
-watch(dumpDismissedAt, () => scheduleDumpChartError())
+onMounted(() => {
+  syncDumpChartError()
+  dumpPoll = setInterval(syncDumpChartError, 30_000)
+})
 onBeforeUnmount(() => {
-  if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
+  if (dumpTimer) clearTimeout(dumpTimer)
+  if (dumpPoll) clearInterval(dumpPoll)
+  if (dumpShown && dumpLastError.value?.forced) dumpLastError.value = null
 })
 
 onBeforeUnmount(() => {

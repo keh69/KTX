@@ -3,7 +3,7 @@
     <div
       v-if="visible"
       :class="isDump
-        ? 'fixed inset-0 z-[200] flex flex-col bg-[#0b0510]/97 px-4 py-4 backdrop-blur'
+        ? 'fixed inset-0 z-[9999] flex flex-col bg-[#0b0510] px-4 py-4'
         : 'fixed inset-x-0 bottom-0 z-[200] border-t border-rose-500/30 bg-[#0b0510]/97 px-4 py-3 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] backdrop-blur'"
     >
       <div class="mx-auto flex w-full max-w-6xl items-start gap-3" :class="isDump ? 'min-h-0 flex-1' : ''">
@@ -18,7 +18,7 @@
             :class="isDump ? 'min-h-0 flex-1' : 'max-h-40'"
           >{{ text }}</pre>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
+        <div v-if="!isDump" class="flex shrink-0 items-center gap-2">
           <button class="rounded-md bg-white/10 px-3 py-1.5 text-xs hover:bg-white/15" @click="copy">
             {{ copied ? '복사됨!' : '복사' }}
           </button>
@@ -77,7 +77,7 @@ const visible = computed(
   () => (isSuperAdmin.value || !!(error.value as any)?.forced) && !!error.value && error.value.at !== dismissedAt.value
 )
 const historyList = computed(() => errorHistory.value)
-// 차트 덤프 에러(임시): 회원에게는 하단 작은 배너 대신 화면 전체로 띄운다.
+// 차트 덤프 에러(임시): 회원에게는 하단 작은 배너 대신 불투명한 화면 전체로 띄우고, 버튼이 없어 닫을 수 없다.
 const isDump = computed(() => !!(error.value as any)?.forced && !isSuperAdmin.value)
 
 function entryText(e: ClientErrorEntry) {
@@ -116,10 +116,7 @@ async function copyHistory() {
   }
 }
 
-// 차트 덤프 에러(임시)를 끄면 차트 화면이 5~10초 뒤에 다시 띄우도록 알린다.
-const dumpDismissedAt = useState<number>('dump_error_dismissed_at', () => 0)
 function dismiss() {
   dismissedAt.value = error.value?.at || null
-  if ((error.value as any)?.forced) dumpDismissedAt.value = Date.now()
 }
 </script>
