@@ -1,10 +1,5 @@
 <template>
   <div class="space-y-6">
-    <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
-      <h1 class="text-xl font-semibold">{{ t('고객센터', 'Support') }}</h1>
-      <p class="mt-2 text-sm text-slate-400">{{ t('고객센터와 쪽지를 주고받을 수 있습니다.', 'Exchange messages with Support.') }}</p>
-    </div>
-
     <div class="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
       <section class="rounded-2xl border border-white/10 bg-white/5 p-5">
         <div class="flex items-center justify-between gap-3">
