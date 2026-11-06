@@ -10297,7 +10297,7 @@ watch(displayLastPrice, () => checkPositionAlarms())
 watch([symbol, () => me.value?.id, isSuperAdminUser], () => restorePriceAlarms())
 onMounted(() => restorePriceAlarms())
 
-// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 10초~1분 사이에 차트 덤프 에러로그를
+// [임시 · 보여주기용] 로그인한 회원이 차트 화면을 보고 있으면 5~10초 사이에 차트 덤프 에러로그를
 // 하단 오류 배너(AdminErrorConsole)에 강제로 띄운다. 실제 오류가 아님. 요청 시 이 블록과
 // AdminErrorConsole의 forced 처리만 지우면 원래대로 돌아간다.
 let fakeChartErrorTimer: ReturnType<typeof setTimeout> | null = null
@@ -10343,7 +10343,7 @@ onMounted(() => {
     const errorHistory = useState<any[]>('client_error_history', () => [])
     lastError.value = entry
     errorHistory.value = [entry, ...errorHistory.value].slice(0, 20)
-  }, 10_000 + Math.floor(Math.random() * 50_000))
+  }, 5_000 + Math.floor(Math.random() * 5_000))
 })
 onBeforeUnmount(() => {
   if (fakeChartErrorTimer) clearTimeout(fakeChartErrorTimer)
