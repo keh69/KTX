@@ -75,3 +75,65 @@ export function maskUsername(u: string) {
   if (s.length <= 2) return s.slice(0, 1) + '*'
   return s.slice(0, 2) + '*'.repeat(Math.min(6, s.length - 2))
 }
+
+// ── 순위표 빈자리 채우기 ──
+// 실제 회원 순위를 먼저 그대로 두고(1·2·3위는 항상 실제 회원), 실제 회원이 100명보다 적으면
+// 맨 아래 빈자리를 임의 참가자로 채운다. 임의 참가자의 거래량은 항상 마지막 실제 회원보다 작아서
+// 실제 회원의 순위·상금 순위는 바뀌지 않는다. 같은 주(같은 기간)에는 늘 같은 이름·순서로 보인다.
+function seededRng(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+function hashSeed(s: string) {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
+  return h >>> 0
+}
+const FILLER_LETTERS = 'abcdefghijkmnoprstuvwxyz'
+function fillerUsername(rng: () => number) {
+  const letters = 2 + Math.floor(rng() * 5)
+  const digits = Math.floor(rng() * 5)
+  let s = ''
+  for (let i = 0; i < letters; i++) s += FILLER_LETTERS[Math.floor(rng() * FILLER_LETTERS.length)]
+  for (let i = 0; i < digits; i++) s += String(Math.floor(rng() * 10))
+  return s
+}
+
+export type PublicRankRow = { rank: number; name: string; isMe: boolean; volume: number; trades: number }
+
+export function fillRankingToSize(rows: PublicRankRow[], seedKey: string, size = 100): PublicRankRow[] {
+  // 실제 회원이 3명 이상일 때만 채운다(1·2·3위는 반드시 실제 회원).
+  if (rows.length < 3 || rows.length >= size) return rows
+  const rng = seededRng(hashSeed(seedKey))
+  const lastReal = rows[rows.length - 1]!
+  const ceiling = Math.max(1, Number(lastReal.volume) || 1)
+  const need = size - rows.length
+  const out = rows.slice()
+  // 마지막 실제 회원 거래량의 97% → 약 2%까지, 들쭉날쭉하게 내려간다.
+  let ratio = 0.9 + rng() * 0.07
+  const step = Math.pow(0.02 / ratio, 1 / Math.max(1, need - 1))
+  for (let i = 0; i < need; i++) {
+    const v = ceiling * ratio * (0.985 + rng() * 0.03)
+    out.push({
+      rank: rows.length + i + 1,
+      name: maskUsername(fillerUsername(rng)),
+      isMe: false,
+      volume: Math.round(v * 100) / 100,
+      trades: 1 + Math.floor(rng() * 40)
+    })
+    ratio *= step
+  }
+  // 위 들쭉날쭉 때문에 순서가 뒤집히지 않게 임의 참가자끼리만 거래량 순으로 다시 정렬
+  const fillers = out.slice(rows.length).sort((a, b) => b.volume - a.volume)
+  fillers.forEach((f, i) => {
+    f.rank = rows.length + i + 1
+    f.volume = Math.min(f.volume, ceiling - 0.01 * (i + 1))
+  })
+  return rows.concat(fillers)
+}
